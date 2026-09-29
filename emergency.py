@@ -355,25 +355,25 @@ class CustomPhraseDialog(tk.Toplevel):
             btn = make_btn(row2, key, font_size=15)
             btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
 
-        # ── Row 3: 7 Control keys in a horizontal row ─────────────────────
+        # ── Row 3: 7 Letter keys in a horizontal row (Z-M) ────────────────
         row3 = tk.Frame(left, bg=SURFACE_COLOR)
         row3.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
         row3.rowconfigure(0, weight=1)
 
-        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
-        for c, ckey in enumerate(ctrl_keys):
-            row3.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row3, ckey, bg_color="#64748B", fg_color="#FFFFFF", font_size=13)
+        for c, key in enumerate(["Z","X","C","V","B","N","M"]):
+            row3.columnconfigure(c, weight=1)
+            btn = make_btn(row3, key, font_size=16)
             btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
 
-        # ── Row 4: 7 Letter keys in a horizontal row (Z-M) ────────────────
+        # ── Row 4: 7 Control keys in a horizontal row ─────────────────────
         row4 = tk.Frame(left, bg=SURFACE_COLOR)
         row4.grid(row=3, column=0, sticky="nsew")
         row4.rowconfigure(0, weight=1)
 
-        for c, key in enumerate(["Z","X","C","V","B","N","M"]):
-            row4.columnconfigure(c, weight=1)
-            btn = make_btn(row4, key, font_size=16)
+        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
+        for c, ckey in enumerate(ctrl_keys):
+            row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
+            btn = make_btn(row4, ckey, bg_color="#64748B", fg_color="#FFFFFF", font_size=13)
             btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
 
         # ── Right Section: 3x4 Numpad Grid ────────────────────────────────

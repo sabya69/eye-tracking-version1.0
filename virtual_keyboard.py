@@ -93,23 +93,8 @@ class VirtualKeyboard:
             x2 = x1 + kw
             self.key_list.append((char, int(x1), int(y1), int(x2), int(y2)))
 
-        # ── 3. Row 3: 7 Control Keys (Horizontal Row across full left width)
+        # ── 3. Row 3: 7 Alphabet Keys (Row 3 letters spread across left width)
         y1 = top_y + 2 * (kh + gap)
-        y2 = y1 + kh
-        ctrl_weights = [1.0, 1.0, 1.2, 2.2, 1.6, 1.0, 1.0]
-        sum_w = sum(ctrl_weights)
-        avail_w_ctrl = w_left - (len(self.CONTROL_KEYS) - 1) * gap
-        cur_x = left_x1
-        for i, ckey in enumerate(self.CONTROL_KEYS):
-            if i == len(self.CONTROL_KEYS) - 1:
-                x2 = left_x_end
-            else:
-                x2 = cur_x + int(avail_w_ctrl * (ctrl_weights[i] / sum_w))
-            self.key_list.append((ckey, int(cur_x), int(y1), int(x2), int(y2)))
-            cur_x = x2 + gap
-
-        # ── 4. Row 4: 7 Alphabet Keys (Row 3 letters spread across left width)
-        y1 = top_y + 3 * (kh + gap)
         y2 = y1 + kh
         r3_keys = self._alphabet_rows["row3"]
         avail_w_r3 = w_left - (len(r3_keys) - 1) * gap
@@ -121,6 +106,21 @@ class VirtualKeyboard:
             else:
                 x2 = cur_x + r3_kw
             self.key_list.append((char, int(cur_x), int(y1), int(x2), int(y2)))
+            cur_x = x2 + gap
+
+        # ── 4. Row 4: 7 Control Keys (Horizontal Row across full left width)
+        y1 = top_y + 3 * (kh + gap)
+        y2 = y1 + kh
+        ctrl_weights = [1.0, 1.0, 1.2, 2.2, 1.6, 1.0, 1.0]
+        sum_w = sum(ctrl_weights)
+        avail_w_ctrl = w_left - (len(self.CONTROL_KEYS) - 1) * gap
+        cur_x = left_x1
+        for i, ckey in enumerate(self.CONTROL_KEYS):
+            if i == len(self.CONTROL_KEYS) - 1:
+                x2 = left_x_end
+            else:
+                x2 = cur_x + int(avail_w_ctrl * (ctrl_weights[i] / sum_w))
+            self.key_list.append((ckey, int(cur_x), int(y1), int(x2), int(y2)))
             cur_x = x2 + gap
 
         # ── 5. Right Side: 3x4 Numpad Grid (Aligned with the 4 rows) ───────

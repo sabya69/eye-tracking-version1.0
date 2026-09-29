@@ -31,10 +31,10 @@ except ImportError:
 
 
 # -- Import the 3 helper modules from this same folder ----------------------- #
-from gaze_cursor      import GazeCursor
-from virtual_keyboard import VirtualKeyboard
-from text_pad         import TextPad
-from heatmap_generator import generate_heatmap   # <-- heatmap support
+from gaze_cursor          import GazeCursor
+from virtual_keyboard     import VirtualKeyboard
+from text_pad             import TextPad
+from heatmap_generator    import generate_heatmap   # <-- heatmap support
 
 # ============================================================================ #
 #  WINDOW NAME  (single source of truth -- change here only)
