@@ -444,68 +444,133 @@ class NotepadWindow(tk.Toplevel):
 #  BUILT-IN ON-SCREEN KEYBOARD  (fallback when virtual_keyboard.py not found)
 # ─────────────────────────────────────────────────────────────────────────────
 class OnScreenKeyboard(tk.Toplevel):
-    
-
-    ROWS = [
-        ["`","1","2","3","4","5","6","7","8","9","0","-","=","⌫"],
-        ["Tab","q","w","e","r","t","y","u","i","o","p","[","]","\\"],
-        ["Caps","a","s","d","f","g","h","j","k","l",";","'","Enter"],
-        ["Shift","z","x","c","v","b","n","m",",",".","/","Shift"],
-        ["Ctrl","Alt","Space","Alt","Ctrl"],
-    ]
-
-    SHIFT_MAP = {
-        "`":"~","1":"!","2":"@","3":"#","4":"$","5":"%","6":"^",
-        "7":"&","8":"*","9":"(","0":")","-":"_","=":"+","[":"{",
-        "]":"}","\\":"|",";":":","'":'"',",":"<",".":">","/":"?",
+    LAYOUTS = {
+        "normal": {
+            "row1": ["Q","W","E","R","T","Y","U","I","O","P"],
+            "row2": ["A","S","D","F","G","H","J","K","L"],
+            "row3": ["Z","X","C","V","B","N","M"],
+        },
+        "alpha": {
+            "row1": ["A","B","C","D","E","F","G","H","I","J"],
+            "row2": ["K","L","M","N","O","P","Q","R","S"],
+            "row3": ["T","U","V","W","X","Y","Z"],
+        },
+        "cluster": {
+            "row1": ["E","T","A","O","I","F","G","Y","P","B"],
+            "row2": ["N","S","H","R","D","V","K","J","X"],
+            "row3": ["L","C","U","M","W","Q","Z"],
+        }
     }
 
-    WIDE = {"⌫":2,"Tab":1.5,"Caps":1.8,"Enter":2,"Shift":2.3,"Space":6,"Ctrl":1.5,"Alt":1.5}
-
-    def __init__(self, master, target: tk.Text):
+    def __init__(self, master, target: tk.Text, layout="normal"):
         super().__init__(master)
         self.title("On-Screen Keyboard")
         self.configure(bg=BG)
         self.resizable(False, False)
         self.attributes("-topmost", True)
         self._target = target
-        self._shift  = False
-        self._caps   = False
+        self._layout = layout if layout in self.LAYOUTS else "normal"
         self._build()
         self._center()
 
+    def set_layout(self, layout):
+        self._layout = layout if layout in self.LAYOUTS else "normal"
+        for widget in self.winfo_children():
+            widget.destroy()
+        self._build()
+
     def _build(self):
-        pad = tk.Frame(self, bg=BG, padx=8, pady=8)
-        pad.pack()
+        main_frame = tk.Frame(self, bg=BG, padx=8, pady=8)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
 
-        for row_keys in self.ROWS:
-            row_frame = tk.Frame(pad, bg=BG)
-            row_frame.pack(pady=3)
-            for key in row_keys:
-                w = self.WIDE.get(key, 1)
-                btn = tk.Button(
-                    row_frame,
-                    text=key,
-                    width=int(w * 3),          # wider keys
-                    height=1,                 # taller keys
-                    font=("Segoe UI", 14, "bold"),   # bigger text
-                    bg=SURFACE, fg=TEXT,
-                    activebackground=ACCENT,
-                    activeforeground=SURFACE,
-                    relief="flat",
-                    bd=0,
-                    highlightbackground=BORDER,
-                    highlightthickness=1,
-                    padx=6,
-                    pady=10,
-                    cursor="hand2"
-                )
-                btn.configure(command=lambda k=key, b=btn: self._press(k, b))
-                btn.pack(side="left", padx=2)
+        def make_btn(parent, text, bg_color=SURFACE, fg_color=TEXT, font_size=18):
+            btn = tk.Button(
+                parent, text=text, font=("Segoe UI", font_size, "bold"),
+                bg=bg_color, fg=fg_color, activebackground=ACCENT,
+                activeforeground=SURFACE, relief="flat", bd=0,
+                highlightbackground=BORDER, highlightthickness=1,
+                cursor="hand2"
+            )
+            btn.configure(command=lambda k=text, b=btn: self._press(k, b))
+            return btn
 
-        # Info label
-        tk.Label(pad, text="After Clicking the keys using tracker you can type in notepad",
-                 bg=BG, fg=MUTED, font=FS).pack(pady=(6,0))
+        alpha_data = self.LAYOUTS.get(self._layout, self.LAYOUTS["normal"])
+
+        # ── 4-Row Grid with Numpad on the Right ────────────────────────────
+        content = tk.Frame(main_frame, bg=BG)
+        content.pack(fill="both", expand=True)
+        content.columnconfigure(0, weight=8)   # left keyboard area
+        content.columnconfigure(1, weight=2)   # numpad
+        content.rowconfigure(0, weight=1)
+
+        # === LEFT KEYBOARD AREA (4 rows) ===
+        left = tk.Frame(content, bg=BG)
+        left.grid(row=0, column=0, sticky="nsew")
+        for i in range(4):
+            left.rowconfigure(i, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        # ── ROW 1: 10 letter keys ────────────────────────────────────────
+        row1 = tk.Frame(left, bg=BG)
+        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
+        row1.rowconfigure(0, weight=1)
+        for c, key in enumerate(alpha_data["row1"]):
+            row1.columnconfigure(c, weight=1)
+            btn = make_btn(row1, key, font_size=20)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # ── ROW 2: 9 letter keys ─────────────────────────────────────────
+        row2 = tk.Frame(left, bg=BG)
+        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 4))
+        row2.rowconfigure(0, weight=1)
+        for c, key in enumerate(alpha_data["row2"]):
+            row2.columnconfigure(c, weight=1)
+            btn = make_btn(row2, key, font_size=20)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # ── ROW 3: 7 control keys in a horizontal row ────────────────────
+        row3 = tk.Frame(left, bg=BG)
+        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
+        row3.rowconfigure(0, weight=1)
+
+        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
+        for c, ckey in enumerate(ctrl_keys):
+            row3.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
+            btn = make_btn(row3, ckey, bg_color="#334155", fg_color="#F8FAFC", font_size=15)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # ── ROW 4: 7 letter keys in a horizontal row ─────────────────────
+        row4 = tk.Frame(left, bg=BG)
+        row4.grid(row=3, column=0, sticky="nsew")
+        row4.rowconfigure(0, weight=1)
+
+        for c, key in enumerate(alpha_data["row3"]):
+            row4.columnconfigure(c, weight=1)
+            btn = make_btn(row4, key, font_size=22)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # === RIGHT NUMPAD (3×4 grid) ===
+        np_outer = tk.Frame(content, bg=BG, highlightbackground=BORDER,
+                            highlightthickness=1, padx=6, pady=4)
+        np_outer.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        np_outer.rowconfigure(1, weight=1)
+        np_outer.columnconfigure(0, weight=1)
+
+        tk.Label(np_outer, text="NUMBERS", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
+
+        np_frame = tk.Frame(np_outer, bg=BG)
+        np_frame.grid(row=1, column=0, sticky="nsew")
+
+        num_grid = [["1","2","3"], ["4","5","6"], ["7","8","9"], [".","0","?"]]
+        for r_idx, row in enumerate(num_grid):
+            np_frame.rowconfigure(r_idx, weight=1)
+            for c_idx, key in enumerate(row):
+                np_frame.columnconfigure(c_idx, weight=1)
+                btn = make_btn(np_frame, key, bg_color="#1E3A8A", fg_color="#F8FAFC", font_size=18)
+                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=2, pady=2)
 
     def _press(self, key, btn_widget=None):
         if btn_widget:
@@ -515,40 +580,34 @@ class OnScreenKeyboard(tk.Toplevel):
             self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
 
         t = self._target
-        if key == "⌫":
-            # Delete last character
-            pos = t.index("insert")
-            if pos != "1.0":
-                t.delete(f"insert-1c", "insert")
-        elif key in ("Shift",):
-            self._shift = not self._shift
-        elif key == "Caps":
-            self._caps = not self._caps
-        elif key == "Enter":
-            t.insert("insert", "\n")
-        elif key == "Tab":
-            t.insert("insert", "\t")
+        if key in ("Save & next", "Enter"):
+            if t: t.insert("insert", "\n")
+        elif key in ("⌫", "Backspace"):
+            if t:
+                pos = t.index("insert")
+                if pos != "1.0":
+                    t.delete("insert-1c", "insert")
+        elif key == "Delete":
+            if t:
+                t.delete("1.0", "end")
+        elif key == "|◄":
+            if t: t.mark_set("insert", "1.0")
+        elif key == "◄":
+            if t:
+                pos = t.index("insert")
+                if pos != "1.0":
+                    t.mark_set("insert", "insert-1c")
+        elif key == "►":
+            if t: t.mark_set("insert", "insert+1c")
+        elif key == "►|":
+            if t: t.mark_set("insert", "end-1c")
         elif key == "Space":
-            t.insert("insert", " ")
-        elif key in ("Ctrl", "Alt"):
-            pass  # modifier stubs
+            if t: t.insert("insert", " ")
         else:
-            char = key
-            # Apply shift map
-            if self._shift and char in self.SHIFT_MAP:
-                char = self.SHIFT_MAP[char]
-            elif char.isalpha():
-                # Caps XOR Shift
-                if self._caps ^ self._shift:
-                    char = char.upper()
-                else:
-                    char = char.lower()
-            t.insert("insert", char)
-            # Auto-release shift after one key
-            if self._shift:
-                self._shift = False
-        t.see("insert")
-        t.focus_set()
+            if t: t.insert("insert", key)
+        if t:
+            t.see("insert")
+            t.focus_set()
 
     def _center(self):
         self.update_idletasks()

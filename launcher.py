@@ -547,40 +547,22 @@ class NotepadWindow(tk.Toplevel):
 # ─────────────────────────────────────────────────────────────────────────────
 class OnScreenKeyboard(tk.Frame):
     LAYOUTS = {
-        "normal": [
-            ["1","2","3","4","5","6","7","8","9","0","-","⌫"],
-            ["Q","W","E","R","T","Y","U","I","O","P","[","]"],
-            ["A","S","D","F","G","H","J","K","L",";","'"],
-            ["Z","X","C","V","B","N","M",",","."],
-            ["Enter", "\\", "Space"],
-            ["MOVE_LEFT", "MOVE_RIGHT"],
-        ],
-        "alpha": [
-            ["1","2","3","4","5","6","7","8","9","0","-","⌫"],
-            ["A","B","C","D","E","F","G","H","I","J","K","L","M"],
-            ["N","O","P","Q","R","S","T","U","V","W","X"],
-            ["Y","Z",",",".",";","'","[","]"],
-            ["Enter", "\\", "Space"],
-            ["MOVE_LEFT", "MOVE_RIGHT"],
-        ],
-        "cluster": [
-            ["1","2","3","4","5","6","7","8","9","0","-","⌫"],
-            ["A","E","T","N","S","H","F","G","Y","P"],
-            ["I","O","R","D","L","C","B","V","K","J"],
-            ["U","M","W","X","Q","Z",",",".",";","'","[","]"],
-            ["Enter", "\\", "Space"],
-            ["MOVE_LEFT", "MOVE_RIGHT"],
-        ]
+        "normal": {
+            "row1": ["Q","W","E","R","T","Y","U","I","O","P"],
+            "row2": ["A","S","D","F","G","H","J","K","L"],
+            "row3": ["Z","X","C","V","B","N","M"],
+        },
+        "alpha": {
+            "row1": ["A","B","C","D","E","F","G","H","I","J"],
+            "row2": ["K","L","M","N","O","P","Q","R","S"],
+            "row3": ["T","U","V","W","X","Y","Z"],
+        },
+        "cluster": {
+            "row1": ["E","T","A","O","I","F","G","Y","P","B"],
+            "row2": ["N","S","H","R","D","V","K","J","X"],
+            "row3": ["L","C","U","M","W","Q","Z"],
+        }
     }
-
-    SHIFT_MAP = {
-        "`":"~","1":"!","2":"@","3":"#","4":"$","5":"%","6":"^",
-        "7":"&","8":"*","9":"(","0":")","-":"_","=":"+","[":"{",
-        "]":"}","\\":"|",";":":","'":'"',",":"<",".":">","/":"?",
-    }
-
-    WIDE = {"⌫":2,"Tab":1.5,"Caps":1.8,"Enter":2,"Shift":2.3,"Space":6,"Ctrl":1.5,"Alt":1.5,"MOVE_LEFT":1.5,"MOVE_RIGHT":1.5}
-
 
     def __init__(self, master, target: tk.Text, layout="normal", notepad_app=None):
         super().__init__(master, bg=BG)
@@ -589,65 +571,24 @@ class OnScreenKeyboard(tk.Frame):
         self._shift  = False
         self._caps   = False
         self._layout = layout
-        self.ROWS = self.LAYOUTS.get(self._layout, self.LAYOUTS["normal"])
-        self._build()
+        self.set_layout(layout)
 
     def set_layout(self, layout):
-        if layout in self.LAYOUTS and layout != self._layout:
-            self._layout = layout
-            self.ROWS = self.LAYOUTS[layout]
-            for widget in self.winfo_children():
-                widget.destroy()
-            self._build()
+        self._layout = layout if layout in self.LAYOUTS else "normal"
+        for widget in self.winfo_children():
+            widget.destroy()
+        self._build()
 
     def _build(self):
-        if self._layout == "cluster":
-            self._build_cluster()
-            return
+        main_frame = tk.Frame(self, bg=BG, padx=8, pady=8)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
 
-        pad = tk.Frame(self, bg=BG, padx=8, pady=8)
-        pad.pack(fill="both", expand=True)
-
-        for r, row_keys in enumerate(self.ROWS):
-            pad.rowconfigure(r, weight=1)
-            row_frame = tk.Frame(pad, bg=BG)
-            row_frame.grid(row=r, column=0, sticky="nsew", pady=4)
-            
-            for c, key in enumerate(row_keys):
-                w = self.WIDE.get(key, 1)
-                row_frame.columnconfigure(c, weight=int(w * 10))
-                
-                btn = tk.Button(
-                    row_frame,
-                    text=key,
-                    font=("Segoe UI", 16, "bold"),
-                    bg=SURFACE, fg=TEXT,
-                    activebackground=ACCENT,
-                    activeforeground=SURFACE,
-                    relief="flat",
-                    bd=0,
-                    highlightbackground=BORDER,
-                    highlightthickness=1,
-                    cursor="hand2"
-                )
-                btn.configure(command=lambda k=key, b=btn: self._press(k, b))
-                btn.grid(row=0, column=c, sticky="nsew", padx=4)
-            row_frame.rowconfigure(0, weight=1)
-
-        # Info label
-        pad.rowconfigure(len(self.ROWS), weight=0)
-        pad.columnconfigure(0, weight=1)
-        tk.Label(pad, text="After Clicking the keys using tracker you can type in notepad",
-                 bg=BG, fg=MUTED, font=FS).grid(row=len(self.ROWS), column=0, pady=(10,0))
-
-    def _build_cluster(self):
-        pad = tk.Frame(self, bg=SURFACE, padx=8, pady=8)
-        pad.pack(fill="both", expand=True)
-
-        def make_btn(parent, text):
+        def make_btn(parent, text, bg_color=SURFACE, fg_color=TEXT, font_size=18):
             btn = tk.Button(
-                parent, text=text, font=("Segoe UI", 16, "bold"),
-                bg=SURFACE, fg=TEXT, activebackground=ACCENT,
+                parent, text=text, font=("Segoe UI", font_size, "bold"),
+                bg=bg_color, fg=fg_color, activebackground=ACCENT,
                 activeforeground=SURFACE, relief="flat", bd=0,
                 highlightbackground=BORDER, highlightthickness=1,
                 cursor="hand2"
@@ -655,76 +596,81 @@ class OnScreenKeyboard(tk.Frame):
             btn.configure(command=lambda k=text, b=btn: self._press(k, b))
             return btn
 
-        # ROW 0: NUMBERS
-        num_frame = tk.Frame(pad, bg=SURFACE)
-        num_frame.pack(fill="x", pady=(0, 8))
-        nums = ["1","2","3","4","5","6","7","8","9","0","-","⌫"]
-        for c, k in enumerate(nums):
-            num_frame.columnconfigure(c, weight=int(self.WIDE.get(k, 1)*10))
-            btn = make_btn(num_frame, k)
-            btn.grid(row=0, column=c, sticky="nsew", padx=4, pady=4)
-        num_frame.rowconfigure(0, weight=1, minsize=50)
+        alpha_data = self.LAYOUTS.get(self._layout, self.LAYOUTS["normal"])
 
-        # ROW 1: CLUSTERS
-        mid_frame = tk.Frame(pad, bg=SURFACE)
-        mid_frame.pack(fill="both", expand=True, pady=4)
-        
-        # Proportional weights so all buttons have exact same width
-        mid_frame.columnconfigure(0, weight=5)
-        mid_frame.columnconfigure(1, weight=6)
-        mid_frame.rowconfigure(0, weight=1)
+        # ── 4-Row Grid with Numpad on the Right ────────────────────────────
+        content = tk.Frame(main_frame, bg=BG)
+        content.pack(fill="both", expand=True)
+        content.columnconfigure(0, weight=8)   # left keyboard area
+        content.columnconfigure(1, weight=2)   # numpad
+        content.rowconfigure(0, weight=1)
 
-        # 1. TOP USAGE
-        t_frame = tk.Frame(mid_frame, bg=BG, highlightbackground=BORDER, highlightthickness=1, padx=8, pady=4)
-        t_frame.grid(row=0, column=0, sticky="nsew", padx=(0,4))
-        tk.Label(t_frame, text="TOP USAGE", bg=BG, fg=MUTED, font=("Segoe UI", 9, "bold")).pack(pady=(0,4))
-        t_grid = tk.Frame(t_frame, bg=BG)
-        t_grid.pack(expand=True, fill="both")
-        t_keys = [
-            ["E","T","A","O","I"],
-            ["N","S","H","R","D"],
-            ["L","C","U","M","W"]
-        ]
-        for r, row in enumerate(t_keys):
-            t_grid.rowconfigure(r, weight=1, minsize=65)
-            for c, k in enumerate(row):
-                t_grid.columnconfigure(c, weight=1)
-                btn = make_btn(t_grid, k)
-                btn.grid(row=r, column=c, sticky="nsew", padx=4, pady=4)
+        # === LEFT KEYBOARD AREA (4 rows) ===
+        left = tk.Frame(content, bg=BG)
+        left.grid(row=0, column=0, sticky="nsew")
+        for i in range(4):
+            left.rowconfigure(i, weight=1)
+        left.columnconfigure(0, weight=1)
 
-        # 2. REMAINING KEYS
-        r_frame = tk.Frame(mid_frame, bg=BG, highlightbackground=BORDER, highlightthickness=1, padx=8, pady=4)
-        r_frame.grid(row=0, column=1, sticky="nsew", padx=(4,0))
-        tk.Label(r_frame, text="REMAINING KEYS", bg=BG, fg=MUTED, font=("Segoe UI", 9, "bold")).pack(pady=(0,4))
-        r_grid = tk.Frame(r_frame, bg=BG)
-        r_grid.pack(expand=True, fill="both")
-        r_keys = [
-            ["F","G","Y","P","B","V"],
-            ["K","J","X","Q","Z","\\"],
-            [",",".",";","'","[","]"]
-        ]
-        for r, row in enumerate(r_keys):
-            r_grid.rowconfigure(r, weight=1, minsize=65)
-            for c, k in enumerate(row):
-                r_grid.columnconfigure(c, weight=1)
-                btn = make_btn(r_grid, k)
-                btn.grid(row=r, column=c, sticky="nsew", padx=4, pady=4)
+        # ── ROW 1: 10 letter keys ────────────────────────────────────────
+        row1 = tk.Frame(left, bg=BG)
+        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
+        row1.rowconfigure(0, weight=1)
+        for c, key in enumerate(alpha_data["row1"]):
+            row1.columnconfigure(c, weight=1)
+            btn = make_btn(row1, key, font_size=20)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
 
-        # ROW 2: ACTION
-        act_frame = tk.Frame(pad, bg=SURFACE)
-        act_frame.pack(fill="x", pady=(8, 0))
-        act_frame.rowconfigure(0, weight=1, minsize=50)
-        
-        act_frame.columnconfigure(0, weight=2)
-        btn_enter = make_btn(act_frame, "Enter")
-        btn_enter.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        
-        act_frame.columnconfigure(1, weight=8)
-        btn_space = make_btn(act_frame, "Space")
-        btn_space.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+        # ── ROW 2: 9 letter keys ─────────────────────────────────────────
+        row2 = tk.Frame(left, bg=BG)
+        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 4))
+        row2.rowconfigure(0, weight=1)
+        for c, key in enumerate(alpha_data["row2"]):
+            row2.columnconfigure(c, weight=1)
+            btn = make_btn(row2, key, font_size=20)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
 
-        tk.Label(pad, text="After Clicking the keys using tracker you can type in notepad",
-                 bg=SURFACE, fg=MUTED, font=FS).pack(pady=(10,0))
+        # ── ROW 3: 7 control keys in a horizontal row ────────────────────
+        row3 = tk.Frame(left, bg=BG)
+        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
+        row3.rowconfigure(0, weight=1)
+
+        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
+        for c, ckey in enumerate(ctrl_keys):
+            row3.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
+            btn = make_btn(row3, ckey, bg_color="#334155", fg_color="#F8FAFC", font_size=15)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # ── ROW 4: 7 letter keys in a horizontal row ─────────────────────
+        row4 = tk.Frame(left, bg=BG)
+        row4.grid(row=3, column=0, sticky="nsew")
+        row4.rowconfigure(0, weight=1)
+
+        for c, key in enumerate(alpha_data["row3"]):
+            row4.columnconfigure(c, weight=1)
+            btn = make_btn(row4, key, font_size=22)
+            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+
+        # === RIGHT NUMPAD (3×4 grid) ===
+        np_outer = tk.Frame(content, bg=BG, highlightbackground=BORDER,
+                            highlightthickness=1, padx=6, pady=4)
+        np_outer.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        np_outer.rowconfigure(1, weight=1)
+        np_outer.columnconfigure(0, weight=1)
+
+        tk.Label(np_outer, text="NUMBERS", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
+
+        np_frame = tk.Frame(np_outer, bg=BG)
+        np_frame.grid(row=1, column=0, sticky="nsew")
+
+        num_grid = [["1","2","3"], ["4","5","6"], ["7","8","9"], [".","0","?"]]
+        for r_idx, row in enumerate(num_grid):
+            np_frame.rowconfigure(r_idx, weight=1)
+            for c_idx, key in enumerate(row):
+                np_frame.columnconfigure(c_idx, weight=1)
+                btn = make_btn(np_frame, key, bg_color="#1E3A8A", fg_color="#F8FAFC", font_size=18)
+                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=2, pady=2)
 
     def _press(self, key, btn_widget=None):
         if btn_widget:
@@ -734,51 +680,37 @@ class OnScreenKeyboard(tk.Frame):
             self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
 
         t = self._target
-        if key == "⌫":
-            # Delete last character
-            pos = t.index("insert")
-            if pos != "1.0":
-                t.delete(f"insert-1c", "insert")
-        elif key in ("Shift",):
-            self._shift = not self._shift
-        elif key == "Caps":
-            self._caps = not self._caps
-        elif key == "Enter":
-            if getattr(self, 'notepad_app', None):
+        if key in ("Save & next", "Enter"):
+            if getattr(self, 'notepad_app', None) and hasattr(self.notepad_app, '_save'):
                 self.notepad_app._save()
-            else:
+            elif t:
                 t.insert("insert", "\n")
-        elif key == "Tab":
-            t.insert("insert", "\t")
+        elif key in ("⌫", "Backspace"):
+            if t:
+                pos = t.index("insert")
+                if pos != "1.0":
+                    t.delete("insert-1c", "insert")
+        elif key == "Delete":
+            if t:
+                t.delete("1.0", "end")
+        elif key == "|◄":
+            if t: t.mark_set("insert", "1.0")
+        elif key == "◄":
+            if t:
+                pos = t.index("insert")
+                if pos != "1.0":
+                    t.mark_set("insert", "insert-1c")
+        elif key == "►":
+            if t: t.mark_set("insert", "insert+1c")
+        elif key == "►|":
+            if t: t.mark_set("insert", "end-1c")
         elif key == "Space":
-            t.insert("insert", " ")
-        elif key == "MOVE_LEFT":
-            # Move cursor left
-            pos = t.index("insert")
-            if pos != "1.0":
-                t.mark_set("insert", "insert-1c")
-        elif key == "MOVE_RIGHT":
-            # Move cursor right
-            t.mark_set("insert", "insert+1c")
-        elif key in ("Ctrl", "Alt"):
-            pass  # modifier stubs
+            if t: t.insert("insert", " ")
         else:
-            char = key
-            # Apply shift map
-            if self._shift and char in self.SHIFT_MAP:
-                char = self.SHIFT_MAP[char]
-            elif char.isalpha():
-                # Caps XOR Shift
-                if self._caps ^ self._shift:
-                    char = char.upper()
-                else:
-                    char = char.lower()
-            t.insert("insert", char)
-            # Auto-release shift after one key
-            if self._shift:
-                self._shift = False
-        t.see("insert")
-        t.focus_set()
+            if t: t.insert("insert", key)
+        if t:
+            t.see("insert")
+            t.focus_set()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CUSTOM WEBVIEW2 WIDGET — to bypass E_ACCESSDENIED by using a custom user data folder

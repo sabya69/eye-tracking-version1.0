@@ -311,61 +311,126 @@ class CustomPhraseDialog(tk.Toplevel):
                        activeforeground=TEXT_MAIN, font=("Segoe UI", 12, "bold")).pack(side="left", padx=20)
 
         # ── On-Screen Virtual Keyboard Container ────────────────────────────
-        kb_frame = tk.Frame(self, bg=SURFACE_COLOR, padx=20, pady=10)
+        kb_frame = tk.Frame(self, bg=SURFACE_COLOR, padx=12, pady=8)
         kb_frame.pack(fill="both", expand=True)
 
-        rows = [
-            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-            ["Z", "X", "C", "V", "B", "N", "M", ",", ".", "?"]
+        def make_btn(parent, text, bg_color="#F1F5F9", fg_color=TEXT_MAIN, font_size=13, command=None):
+            btn = tk.Button(
+                parent, text=text, font=("Segoe UI", font_size, "bold"),
+                bg=bg_color, fg=fg_color, activebackground="#CBD5E1",
+                activeforeground=TEXT_MAIN, relief="solid", bd=1,
+                cursor="hand2", command=command or (lambda k=text: self._handle_key(k))
+            )
+            return btn
+
+        # ── 4-Row Keyboard Structure + Right Numpad ───────────────────────
+        content = tk.Frame(kb_frame, bg=SURFACE_COLOR)
+        content.pack(fill="both", expand=True)
+        content.columnconfigure(0, weight=8)
+        content.columnconfigure(1, weight=2)
+        content.rowconfigure(0, weight=1)
+
+        # Left area (4 rows)
+        left = tk.Frame(content, bg=SURFACE_COLOR)
+        left.grid(row=0, column=0, sticky="nsew")
+        for i in range(4):
+            left.rowconfigure(i, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        # ── Row 1: 10 keys (Q-P) ──────────────────────────────────────────
+        row1 = tk.Frame(left, bg=SURFACE_COLOR)
+        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 3))
+        row1.rowconfigure(0, weight=1)
+        for c, key in enumerate(["Q","W","E","R","T","Y","U","I","O","P"]):
+            row1.columnconfigure(c, weight=1)
+            btn = make_btn(row1, key, font_size=15)
+            btn.grid(row=0, column=c, sticky="nsew", padx=1, pady=1)
+
+        # ── Row 2: 9 keys (A-L) ───────────────────────────────────────────
+        row2 = tk.Frame(left, bg=SURFACE_COLOR)
+        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 3))
+        row2.rowconfigure(0, weight=1)
+        for c, key in enumerate(["A","S","D","F","G","H","J","K","L"]):
+            row2.columnconfigure(c, weight=1)
+            btn = make_btn(row2, key, font_size=15)
+            btn.grid(row=0, column=c, sticky="nsew", padx=1, pady=1)
+
+        # ── Row 3: 7 Control keys in a horizontal row ─────────────────────
+        row3 = tk.Frame(left, bg=SURFACE_COLOR)
+        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 3))
+        row3.rowconfigure(0, weight=1)
+
+        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
+        for c, ckey in enumerate(ctrl_keys):
+            row3.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
+            btn = make_btn(row3, ckey, bg_color="#64748B", fg_color="#FFFFFF", font_size=13)
+            btn.grid(row=0, column=c, sticky="nsew", padx=1, pady=1)
+
+        # ── Row 4: 7 Letter keys in a horizontal row (Z-M) ────────────────
+        row4 = tk.Frame(left, bg=SURFACE_COLOR)
+        row4.grid(row=3, column=0, sticky="nsew")
+        row4.rowconfigure(0, weight=1)
+
+        for c, key in enumerate(["Z","X","C","V","B","N","M"]):
+            row4.columnconfigure(c, weight=1)
+            btn = make_btn(row4, key, font_size=16)
+            btn.grid(row=0, column=c, sticky="nsew", padx=1, pady=1)
+
+        # ── Right Section: 3x4 Numpad Grid ────────────────────────────────
+        np_outer = tk.Frame(content, bg=SURFACE_COLOR, highlightbackground="#CBD5E1",
+                            highlightthickness=1, padx=6, pady=4)
+        np_outer.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        np_outer.rowconfigure(1, weight=1)
+        np_outer.columnconfigure(0, weight=1)
+
+        tk.Label(np_outer, text="NUMBERS", bg=SURFACE_COLOR, fg=TEXT_MAIN,
+                 font=("Segoe UI", 8, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
+
+        num_grid = [
+            ["1", "2", "3"],
+            ["4", "5", "6"],
+            ["7", "8", "9"],
+            [".", "0", "?"]
         ]
-
-        for r_idx, row_keys in enumerate(rows):
-            rf = tk.Frame(kb_frame, bg=SURFACE_COLOR)
-            rf.pack(pady=4)
-            for k in row_keys:
-                btn = tk.Button(rf, text=k, font=("Segoe UI", 14, "bold"), width=4, height=1,
-                                bg="#F1F5F9", fg=TEXT_MAIN, activebackground="#CBD5E1",
-                                activeforeground=TEXT_MAIN, relief="solid", bd=1, cursor="hand2",
-                                command=lambda char=k: self._press_key(char))
-                btn.pack(side="left", padx=4)
-
-        # Special Action Keys Row
-        special_rf = tk.Frame(kb_frame, bg=SURFACE_COLOR)
-        special_rf.pack(pady=8)
-
-        tk.Button(special_rf, text="␣ SPACE", font=("Segoe UI", 13, "bold"), width=16, height=1,
-                  bg="#F1F5F9", fg=TEXT_MAIN, activebackground="#CBD5E1",
-                  activeforeground=TEXT_MAIN, relief="solid", bd=1, cursor="hand2",
-                  command=lambda: self._press_key(" ")).pack(side="left", padx=6)
-
-        tk.Button(special_rf, text="⌫ BACKSPACE", font=("Segoe UI", 13, "bold"), width=14, height=1,
-                  bg="#F1F5F9", fg=TEXT_MAIN, activebackground="#CBD5E1",
-                  activeforeground=TEXT_MAIN, relief="solid", bd=1, cursor="hand2",
-                  command=self._backspace).pack(side="left", padx=6)
-
-        tk.Button(special_rf, text="CLEAR", font=("Segoe UI", 13, "bold"), width=10, height=1,
-                  bg="#F1F5F9", fg=TEXT_MAIN, activebackground="#CBD5E1",
-                  activeforeground=TEXT_MAIN, relief="solid", bd=1, cursor="hand2",
-                  command=lambda: self.entry_var.set("")).pack(side="left", padx=6)
+        np_frame = tk.Frame(np_outer, bg=SURFACE_COLOR)
+        np_frame.grid(row=1, column=0, sticky="nsew")
+        for r_idx, row in enumerate(num_grid):
+            np_frame.rowconfigure(r_idx, weight=1)
+            for c_idx, key in enumerate(row):
+                np_frame.columnconfigure(c_idx, weight=1)
+                btn = make_btn(np_frame, key, bg_color="#3B82F6", fg_color="#FFFFFF", font_size=14)
+                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=1, pady=1)
 
         # ── Dialog Action Buttons (Add / Cancel) ─────────────────────────────
-        btn_frame = tk.Frame(self, bg=SURFACE_COLOR, pady=12)
+        btn_frame = tk.Frame(self, bg=SURFACE_COLOR, pady=8)
         btn_frame.pack(fill="x", side="bottom")
 
-        tk.Button(btn_frame, text="Add Phrase", font=("Segoe UI", 15, "bold"),
+        tk.Button(btn_frame, text="Add Phrase", font=("Segoe UI", 14, "bold"),
                   bg=GREEN_TILE, fg="#FFFFFF", activebackground=GREEN_TILE_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=28, pady=8,
-                  cursor="hand2", command=self._on_add).pack(side="left", padx=(40, 10))
+                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=6,
+                  cursor="hand2", command=self._on_add).pack(side="left", padx=(30, 10))
 
-        tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 15),
+        tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 14),
                   bg=BORDER_COLOR, fg=TEXT_MAIN, activebackground="#CBD5E1",
-                  activeforeground=TEXT_MAIN, relief="flat", padx=28, pady=8,
-                  cursor="hand2", command=self.destroy).pack(side="right", padx=(10, 40))
+                  activeforeground=TEXT_MAIN, relief="flat", padx=24, pady=6,
+                  cursor="hand2", command=self.destroy).pack(side="right", padx=(10, 30))
 
         self.bind("<Return>", lambda e: self._on_add())
         self.bind("<Escape>", lambda e: self.destroy())
+
+    def _handle_key(self, key):
+        if key in ("Save & next", "Enter"):
+            self._on_add()
+        elif key in ("⌫", "Backspace"):
+            self._backspace()
+        elif key == "Delete":
+            self.entry_var.set("")
+        elif key == "Space":
+            self.entry_var.set(self.entry_var.get() + " ")
+        elif key in ("|◄", "◄", "►", "►|"):
+            pass
+        else:
+            self.entry_var.set(self.entry_var.get() + key)
 
     def _press_key(self, char):
         self.entry_var.set(self.entry_var.get() + char)
