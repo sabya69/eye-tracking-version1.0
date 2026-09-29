@@ -14,7 +14,7 @@ class VirtualKeyboard:
     DWELL_TIME = 1.2
     KEY_W = 78
     KEY_H = 70
-    KEY_GAP = 8
+    KEY_GAP = 14
     MARGIN = 16
     TEXT_H = 60
 

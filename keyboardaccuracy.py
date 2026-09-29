@@ -514,32 +514,32 @@ class OnScreenKeyboard(tk.Toplevel):
 
         # ── ROW 1: 10 letter keys ────────────────────────────────────────
         row1 = tk.Frame(left, bg=BG)
-        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
+        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 6))
         row1.rowconfigure(0, weight=1)
         for c, key in enumerate(alpha_data["row1"]):
             row1.columnconfigure(c, weight=1)
             btn = make_btn(row1, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
 
         # ── ROW 2: 9 letter keys ─────────────────────────────────────────
         row2 = tk.Frame(left, bg=BG)
-        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 4))
+        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 6))
         row2.rowconfigure(0, weight=1)
         for c, key in enumerate(alpha_data["row2"]):
             row2.columnconfigure(c, weight=1)
             btn = make_btn(row2, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
 
         # ── ROW 3: 7 control keys in a horizontal row ────────────────────
         row3 = tk.Frame(left, bg=BG)
-        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
+        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
         row3.rowconfigure(0, weight=1)
 
         ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
         for c, ckey in enumerate(ctrl_keys):
             row3.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
             btn = make_btn(row3, ckey, bg_color="#334155", fg_color="#F8FAFC", font_size=15)
-            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+            btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
 
         # ── ROW 4: 7 letter keys in a horizontal row ─────────────────────
         row4 = tk.Frame(left, bg=BG)
@@ -549,12 +549,12 @@ class OnScreenKeyboard(tk.Toplevel):
         for c, key in enumerate(alpha_data["row3"]):
             row4.columnconfigure(c, weight=1)
             btn = make_btn(row4, key, font_size=22)
-            btn.grid(row=0, column=c, sticky="nsew", padx=2, pady=2)
+            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
 
         # === RIGHT NUMPAD (3×4 grid) ===
         np_outer = tk.Frame(content, bg=BG, highlightbackground=BORDER,
                             highlightthickness=1, padx=6, pady=4)
-        np_outer.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        np_outer.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         np_outer.rowconfigure(1, weight=1)
         np_outer.columnconfigure(0, weight=1)
 
@@ -570,7 +570,7 @@ class OnScreenKeyboard(tk.Toplevel):
             for c_idx, key in enumerate(row):
                 np_frame.columnconfigure(c_idx, weight=1)
                 btn = make_btn(np_frame, key, bg_color="#1E3A8A", fg_color="#F8FAFC", font_size=18)
-                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=2, pady=2)
+                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
 
     def _press(self, key, btn_widget=None):
         if btn_widget:
