@@ -1,4 +1,3 @@
-
 import tkinter as tk
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json, csv
@@ -1234,6 +1233,7 @@ class TextEntryExperiment(tk.Toplevel):
 
     def _clear(self):
         self._cancel_after()
+        self._destroy_rest_widgets()
         self._canvas.delete("all")
 
     def _reset_trial_tracking(self):
@@ -1927,6 +1927,10 @@ class TextEntryExperiment(tk.Toplevel):
                 pass
             # Play initial TTS announcement in a background thread
             self._speak_async("Tracker is paused. Take a rest.")
+            # Skip-rest state + button
+            self._rest_prompt_open  = False
+            self._rest_resume_secs  = None
+            self._create_skip_button()
 
         c  = self._canvas
         cx, cy = self._cx(), self._cy()
@@ -1978,8 +1982,9 @@ class TextEntryExperiment(tk.Toplevel):
             if secs == 10:
                 self._speak_async("Tracker is starting in 10")
 
-            self._after_id = self.after(1000, lambda: self._show_rest_screen(secs - 1))
+            self._after_id = self.after(1000, lambda: self._rest_tick(secs - 1))
         else:
+            self._destroy_rest_widgets()
             # ── Resume tracker by deleting the pause flag ──────────────────────
             try:
                 if os.path.exists(self._PAUSE_FLAG):
@@ -1995,6 +2000,90 @@ class TextEntryExperiment(tk.Toplevel):
             self._beep_async(1400, 300)
             self._speak_async("Tracker is starting.")
             self._after_id = self.after(800, self._show_fixation)
+
+    # ── Skip-rest feature ────────────────────────────────────────────────────
+    def _rest_tick(self, secs):
+        """Advance the countdown, unless the skip prompt is open (then wait)."""
+        if getattr(self, "_rest_prompt_open", False):
+            self._rest_resume_secs = secs      # continue from here on "No"
+            return
+        self._show_rest_screen(secs)
+
+    def _create_skip_button(self):
+        self._destroy_rest_widgets()
+        c = self._canvas
+        cx, cy = self._cx(), self._cy()
+        self._skip_btn = tk.Button(
+            c, text="  ⏭  Skip Rest  ",
+            command=self._ask_skip_rest,
+            bg=self._C_BG, fg=self._C_FG,
+            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            relief="solid", bd=1, font=("Segoe UI", 14, "bold"),
+            padx=24, pady=10, cursor="hand2")
+        self._skip_btn_win = c.create_window(cx, cy + 235, window=self._skip_btn,
+                                             anchor="center", tags="rest_skip")
+
+    def _ask_skip_rest(self):
+        """Pop up 'Do you want to skip the rest time?' (countdown is held)."""
+        if getattr(self, "_rest_prompt_open", False):
+            return
+        self._rest_prompt_open = True
+        c = self._canvas
+        cx, cy = self._cx(), self._cy()
+        box = tk.Frame(c, bg=self._C_BG, highlightbackground=self._C_FG,
+                       highlightthickness=2, padx=40, pady=28)
+        tk.Label(box, text="Do you want to skip the rest time?",
+                 bg=self._C_BG, fg=self._C_FG,
+                 font=("Segoe UI", 18, "bold")).pack(pady=(0, 6))
+        tk.Label(box, text="The countdown is on hold until you choose.",
+                 bg=self._C_BG, fg=self._C_DIM,
+                 font=self._F_SMALL).pack(pady=(0, 18))
+        row = tk.Frame(box, bg=self._C_BG); row.pack()
+        tk.Button(row, text="  Yes, skip  ", command=self._skip_rest_yes,
+                  bg=self._C_GRN, fg="white", activebackground="#15803D",
+                  activeforeground="white", relief="flat",
+                  font=("Segoe UI", 15, "bold"), padx=22, pady=10,
+                  cursor="hand2").pack(side="left", padx=12)
+        tk.Button(row, text="  No, keep resting  ", command=self._skip_rest_no,
+                  bg=self._C_BG, fg=self._C_FG, activebackground="#EFEFEF",
+                  relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
+                  padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
+        self._skip_box = box
+        self._skip_box_win = c.create_window(cx, cy, window=box,
+                                             anchor="center", tags="rest_skip")
+        c.tag_raise("rest_skip")
+
+    def _close_skip_prompt(self):
+        self._rest_prompt_open = False
+        box = getattr(self, "_skip_box", None)
+        if box is not None:
+            try: box.destroy()
+            except Exception: pass
+            self._skip_box = None
+
+    def _skip_rest_no(self):
+        self._close_skip_prompt()
+        secs = getattr(self, "_rest_resume_secs", None)
+        self._rest_resume_secs = None
+        if secs is not None:               # tick was held -> continue now
+            self._show_rest_screen(secs)
+
+    def _skip_rest_yes(self):
+        self._close_skip_prompt()
+        self._rest_resume_secs = None
+        self._cancel_after()
+        self._show_rest_screen(0)          # jumps to the "GO!" branch
+
+    def _destroy_rest_widgets(self):
+        for name in ("_skip_box", "_skip_btn"):
+            w = getattr(self, name, None)
+            if w is not None:
+                try: w.destroy()
+                except Exception: pass
+                setattr(self, name, None)
+        try: self._canvas.delete("rest_skip")
+        except Exception: pass
+        self._rest_prompt_open = False
 
     def _center_cursor(self):
         """Warp the OS mouse pointer to the exact centre of this window's screen."""
