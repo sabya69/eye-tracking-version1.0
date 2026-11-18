@@ -1,0 +1,401 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[a4paper,landscape,margin=0.55in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage[table]{xcolor}
+\usepackage{ragged2e}
+\usepackage{helvet}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+% Simple colors
+\definecolor{headergray}{RGB}{235,235,235}
+\definecolor{textgray}{RGB}{80,80,80}
+
+% Column types
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.3}
+
+\begin{document}
+
+% =========================================================
+% TITLE
+% =========================================================
+
+\begin{center}
+    {\Large\bfseries Typing Experiment Data}\\
+    \vspace{2pt}
+    Participant: \textbf{Adi}
+\end{center}
+
+\vspace{0.25cm}
+
+% =========================================================
+% TRIAL PERFORMANCE
+% =========================================================
+
+\noindent
+{\large\bfseries 1. Trial Performance}
+
+\vspace{0.08cm}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{
+    C{0.45in}
+    C{0.65in}
+    L{2.35in}
+    L{2.55in}
+    C{0.65in}
+    C{0.65in}
+    C{0.55in}
+    C{0.75in}
+    C{0.55in}
+}
+\toprule
+
+\rowcolor{headergray}
+\textbf{Trial} &
+\textbf{Method} &
+\textbf{Stimulus} &
+\textbf{Typed Response} &
+\textbf{Correct} &
+\textbf{Time (s)} &
+\textbf{Space} &
+\textbf{Backspace} &
+\textbf{Chars}
+\\
+
+\midrule
+
+1 &
+Covert &
+help &
+HELP &
+Yes &
+45.462 &
+0 &
+0 &
+4
+\\
+
+2 &
+Covert &
+food &
+FOOD &
+Yes &
+17.031 &
+0 &
+0 &
+4
+\\
+
+3 &
+Covert &
+The quick brown fox jumps over the lazy dog. &
+THE QUICK BROWN FOX JUMPS OVER THE LAZY DOGG &
+No &
+343.132 &
+8 &
+6 &
+44
+\\
+
+4 &
+Covert &
+sleep &
+SLEEP &
+Yes &
+71.612 &
+0 &
+9 &
+5
+\\
+
+5 &
+Covert &
+Doctor &
+DOCTOR &
+Yes &
+23.954 &
+0 &
+0 &
+6
+\\
+
+6 &
+Covert &
+I agree with you &
+I AGREE WITH YOU &
+Yes &
+72.455 &
+3 &
+3 &
+16
+\\
+
+7 &
+Covert &
+Medicine &
+MEDICINE &
+Yes &
+40.839 &
+0 &
+2 &
+8
+\\
+
+8 &
+Covert &
+Water &
+WATER &
+Yes &
+28.456 &
+0 &
+1 &
+5
+\\
+
+9 &
+Covert &
+a little encouragement is needed &
+A LITTLE ENCOURAGEMENT IS NEEDED &
+Yes &
+152.958 &
+3 &
+4 &
+32
+\\
+
+10 &
+Covert &
+Pain &
+PAIN &
+Yes &
+49.270 &
+1 &
+3 &
+4
+\\
+
+11 &
+Covert &
+Uncomfortable &
+UNCOMFORTABLE &
+Yes &
+69.743 &
+0 &
+3 &
+13
+\\
+
+12 &
+Covert &
+I would like to go home &
+I WOULD LIKE TO GO HOME &
+Yes &
+89.491 &
+5 &
+2 &
+23
+\\
+
+13 &
+Covert &
+family &
+FAMILY &
+Yes &
+26.852 &
+0 &
+1 &
+6
+\\
+
+14 &
+Covert &
+Friends &
+FRIENS &
+No &
+17.988 &
+0 &
+0 &
+6
+\\
+
+15 &
+Covert &
+the computer is running slowly &
+THE COMPUTER IS RUNNING SLOWLY &
+Yes &
+118.261 &
+4 &
+3 &
+30
+\\
+
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\vspace{0.35cm}
+
+% =========================================================
+% KEYSTROKE TIMESTAMPS
+% =========================================================
+
+\noindent
+{\large\bfseries 2. Keystroke Timestamps}
+
+\vspace{0.08cm}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{
+    C{0.55in}
+    X
+}
+\toprule
+
+\rowcolor{headergray}
+\textbf{Trial} &
+\textbf{Keystroke Timestamps (seconds)}
+\\
+
+\midrule
+
+1 &
+\begin{tabular}[t]{@{}l@{}}
+H:0.000,\ E:17.099,\ L:34.640,\ P:38.772
+\end{tabular}
+\\[0.12cm]
+
+2 &
+\begin{tabular}[t]{@{}l@{}}
+F:0.000,\ O:5.183,\ O:6.989,\ D:11.486
+\end{tabular}
+\\[0.12cm]
+
+3 &
+\begin{tabular}[t]{@{}l@{}}
+J:0.000,\ BS:22.856,\ T:37.142,\ H:69.020,\ E:75.701,\ SP:83.293,\ Q:88.030,\ U:94.619\\
+I:98.599,\ C:104.472,\ K:112.059,\ SP:116.603,\ B:123.196,\ R:131.014,\ O:139.596,\ W:144.263\\
+N:150.789,\ SP:156.715,\ F:160.322,\ O:166.551,\ X:173.250,\ SP:178.511,\ J:184.597,\ U:188.449\\
+M:193.594,\ P:200.556,\ S:205.122,\ SP:210.182,\ O:220.741,\ B:225.339,\ BS:233.440,\ V:238.320\\
+E:242.780,\ R:248.132,\ SP:255.070,\ D:258.422,\ F:259.698,\ BS:265.086,\ BS:268.699,\ T:272.102\\
+J:273.608,\ BS:279.513,\ J:281.934,\ BS:285.708,\ H:290.688,\ E:293.971,\ SP:298.289,\ L:304.062\\
+A:307.743,\ Z:312.506,\ Y:317.231,\ SP:323.072,\ D:326.065,\ O:329.372,\ G:335.274,\ G:335.370
+\end{tabular}
+\\[0.12cm]
+
+4 &
+\begin{tabular}[t]{@{}l@{}}
+S:0.000,\ L:5.838,\ R:11.785,\ E:12.738,\ BS:20.681,\ BS:22.046,\ BS:22.046,\ BS:22.046\\
+s:26.564,\ l:27.221,\ e:27.695,\ e:27.840,\ p:28.296,\ BS:33.057,\ BS:33.283,\ BS:33.504\\
+BS:33.675,\ BS:34.460,\ S:43.368,\ L:50.421,\ E:58.703,\ E:60.168,\ P:67.653
+\end{tabular}
+\\[0.12cm]
+
+5 &
+\begin{tabular}[t]{@{}l@{}}
+D:0.000,\ O:5.915,\ C:10.227,\ T:13.740,\ O:17.938,\ R:20.282
+\end{tabular}
+\\[0.12cm]
+
+6 &
+\begin{tabular}[t]{@{}l@{}}
+I:0.000,\ A:5.446,\ BS:11.875,\ BS:12.305,\ I:16.530,\ SP:19.986,\ A:27.575,\ G:31.982\\
+R:33.975,\ E:36.679,\ E:37.771,\ E:37.960,\ BS:40.941,\ SP:42.985,\ W:47.960,\ I:51.869\\
+T:55.077,\ H:57.209,\ SP:59.318,\ Y:62.476,\ O:65.808,\ U:69.983
+\end{tabular}
+\\[0.12cm]
+
+7 &
+\begin{tabular}[t]{@{}l@{}}
+M:0.000,\ E:5.397,\ E:5.713,\ BS:9.761,\ D:11.765,\ I:14.269,\ C:17.681,\ I:22.706\\
+N:25.633,\ D:28.836,\ BS:32.579,\ E:36.710
+\end{tabular}
+\\[0.12cm]
+
+8 &
+\begin{tabular}[t]{@{}l@{}}
+W:0.000,\ W:0.479,\ BS:5.230,\ A:7.124,\ T:9.256,\ E:20.614,\ R:23.419
+\end{tabular}
+\\[0.12cm]
+
+9 &
+\begin{tabular}[t]{@{}l@{}}
+S:0.000,\ BS:4.465,\ A:9.433,\ SP:14.216,\ L:19.358,\ J:23.470,\ BS:27.026,\ I:31.349\\
+T:35.342,\ T:36.392,\ L:39.452,\ E:45.609,\ SP:49.398,\ E:53.346,\ N:59.523,\ C:63.741\\
+K:67.560,\ BS:69.718,\ O:74.640,\ U:77.891,\ T:83.099,\ BS:85.566,\ R:88.324,\ A:90.129\\
+G:92.664,\ E:94.941,\ M:99.726,\ E:104.907,\ N:107.152,\ T:109.366,\ I:112.193,\ S:116.966\\
+S:125.570,\ SP:132.816,\ N:135.853,\ E:141.558,\ E:142.774,\ D:145.391,\ E:147.762,\ D:149.287
+\end{tabular}
+\\[0.12cm]
+
+10 &
+\begin{tabular}[t]{@{}l@{}}
+H:0.000,\ SP:3.982,\ P:8.862,\ BS:20.202,\ BS:20.202,\ BS:20.202,\ P:25.806,\ A:38.954\\
+I:44.280,\ N:46.990
+\end{tabular}
+\\[0.12cm]
+
+11 &
+\begin{tabular}[t]{@{}l@{}}
+Y:0.000,\ BS:5.321,\ U:9.917,\ N:12.419,\ V:17.765,\ X:18.781,\ BS:22.175,\ BS:23.882\\
+C:25.364,\ O:28.968,\ M:31.454,\ F:36.186,\ O:39.944,\ R:45.310,\ T:46.607,\ A:49.926\\
+B:52.608,\ L:56.746,\ E:61.525
+\end{tabular}
+\\[0.12cm]
+
+12 &
+\begin{tabular}[t]{@{}l@{}}
+I:0.000,\ SP:4.034,\ W:7.710,\ O:10.396,\ U:13.607,\ L:16.463,\ D:18.715,\ SP:20.631\\
+L:22.551,\ U:23.837,\ BS:30.024,\ I:33.250,\ K:35.363,\ E:38.470,\ SP:41.305,\ T:46.093\\
+I:49.616,\ BS:55.062,\ O:59.126,\ SP:61.197,\ G:63.347,\ O:66.377,\ SP:68.732,\ H:72.734\\
+O:78.739,\ M:80.391,\ E:83.015
+\end{tabular}
+\\[0.12cm]
+
+13 &
+\begin{tabular}[t]{@{}l@{}}
+D:0.000,\ BS:3.167,\ F:6.247,\ A:9.121,\ M:15.017,\ I:17.494,\ L:19.695,\ Y:23.751
+\end{tabular}
+\\[0.12cm]
+
+14 &
+\begin{tabular}[t]{@{}l@{}}
+F:0.000,\ R:1.939,\ I:4.196,\ E:7.099,\ N:10.355,\ S:12.670
+\end{tabular}
+\\[0.12cm]
+
+15 &
+\begin{tabular}[t]{@{}l@{}}
+T:0.000,\ H:1.965,\ E:3.808,\ SP:8.287,\ C:9.865,\ O:16.266,\ M:18.570,\ P:22.745\\
+U:24.312,\ T:26.357,\ E:28.663,\ R:30.896,\ R:31.260,\ BS:34.783,\ SP:37.460,\ I:41.905\\
+S:44.832,\ SP:47.219,\ R:50.913,\ U:52.733,\ N:56.144,\ N:58.066,\ I:60.307,\ N:62.210\\
+G:64.757,\ SP:66.990,\ S:69.342,\ K:72.033,\ BS:85.967,\ L:90.169,\ O:92.763,\ W:96.416\\
+L:104.093,\ Y:107.948,\ Y:108.246,\ BS:112.587
+\end{tabular}
+\\[0.12cm]
+
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\vfill
+
+% =========================================================
+% SIMPLE FOOTER
+% =========================================================
+
+\noindent
+\textbf{Participant:} Adi
+\hfill
+\textbf{Total Trials:} 15
+\hfill
+\textbf{Correct Trials:} 13/15
+
+\end{document}
