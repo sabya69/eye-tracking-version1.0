@@ -7,6 +7,7 @@ import subprocess
 import urllib.request
 import urllib.parse
 import tkinter as tk
+from theme import T          # warm eye-comfort colours (see theme.py)
 from tkinter import messagebox, font as tkfont, simpledialog
 
 try:
@@ -16,22 +17,22 @@ except ImportError:
     HAS_WINSOUND = False
 
 # ── Color Palette & Styles (Light Mode / White Theme AAC Layout) ─────────────
-BG_COLOR       = "#F8FAFC"   # Clean light background
-SURFACE_COLOR  = "#FFFFFF"   # Pure white surface
-TEXT_MAIN      = "#0F172A"   # High contrast dark slate text
-TEXT_MUTED     = "#475569"   # Muted gray text
+BG_COLOR       = T("#F8FAFC")   # Clean light background
+SURFACE_COLOR  = T("#FFFFFF")   # Pure white surface
+TEXT_MAIN      = T("#0F172A")   # High contrast dark slate text
+TEXT_MUTED     = T("#475569")   # Muted gray text
 
-GREEN_TILE     = "#16A34A"   # Primary green phrase tile
-GREEN_TILE_HOV = "#15803D"
-ORANGE_TILE    = "#EA580C"   # Quick answer orange phrase tile
-ORANGE_TILE_HOV= "#C2410C"
+GREEN_TILE     = T("#16A34A")   # Primary green phrase tile
+GREEN_TILE_HOV = T("#15803D")
+ORANGE_TILE    = T("#EA580C")   # Quick answer orange phrase tile
+ORANGE_TILE_HOV= T("#C2410C")
 
-RED_BTN        = "#DC2626"   # Emergency red button
-RED_BTN_HOV    = "#B91C1C"
-BLUE_BTN       = "#2563EB"   # Utility blue
-PURPLE_BTN     = "#7C3AED"   # Add phrase purple
+RED_BTN        = T("#DC2626")   # Emergency red button
+RED_BTN_HOV    = T("#B91C1C")
+BLUE_BTN       = T("#2563EB")   # Utility blue
+PURPLE_BTN     = T("#7C3AED")   # Add phrase purple
 
-BORDER_COLOR   = "#E2E8F0"
+BORDER_COLOR   = T("#E2E8F0")
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emergency_config.json")
 LOG_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emergency_sent_log.txt")
@@ -256,7 +257,7 @@ class AlertSettingsDialog(tk.Toplevel):
         btn_f.pack(pady=15)
 
         tk.Button(btn_f, text="Save Settings", font=("Segoe UI", 13, "bold"),
-                  bg=GREEN_TILE, fg="#FFFFFF", activebackground=GREEN_TILE_HOV,
+                  bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
                   relief="flat", padx=24, pady=8, cursor="hand2", command=self._save).pack(side="left", padx=10)
         
         tk.Button(btn_f, text="Cancel", font=("Segoe UI", 13),
@@ -314,10 +315,10 @@ class CustomPhraseDialog(tk.Toplevel):
         kb_frame = tk.Frame(self, bg=SURFACE_COLOR, padx=12, pady=8)
         kb_frame.pack(fill="both", expand=True)
 
-        def make_btn(parent, text, bg_color="#F1F5F9", fg_color=TEXT_MAIN, font_size=13, command=None):
+        def make_btn(parent, text, bg_color=T("#F1F5F9"), fg_color=TEXT_MAIN, font_size=13, command=None):
             btn = tk.Button(
                 parent, text=text, font=("Segoe UI", font_size, "bold"),
-                bg=bg_color, fg=fg_color, activebackground="#CBD5E1",
+                bg=bg_color, fg=fg_color, activebackground=T("#CBD5E1"),
                 activeforeground=TEXT_MAIN, relief="solid", bd=1,
                 cursor="hand2", command=command or (lambda k=text: self._handle_key(k))
             )
@@ -373,11 +374,11 @@ class CustomPhraseDialog(tk.Toplevel):
         ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
         for c, ckey in enumerate(ctrl_keys):
             row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color="#64748B", fg_color="#FFFFFF", font_size=13)
+            btn = make_btn(row4, ckey, bg_color=T("#64748B"), fg_color=T("#FFFFFF"), font_size=13)
             btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
 
         # ── Right Section: 3x4 Numpad Grid ────────────────────────────────
-        np_outer = tk.Frame(content, bg=SURFACE_COLOR, highlightbackground="#CBD5E1",
+        np_outer = tk.Frame(content, bg=SURFACE_COLOR, highlightbackground=T("#CBD5E1"),
                             highlightthickness=1, padx=6, pady=4)
         np_outer.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         np_outer.rowconfigure(1, weight=1)
@@ -398,7 +399,7 @@ class CustomPhraseDialog(tk.Toplevel):
             np_frame.rowconfigure(r_idx, weight=1)
             for c_idx, key in enumerate(row):
                 np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color="#3B82F6", fg_color="#FFFFFF", font_size=14)
+                btn = make_btn(np_frame, key, bg_color=T("#3B82F6"), fg_color=T("#FFFFFF"), font_size=14)
                 btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=2, pady=2)
 
         # ── Dialog Action Buttons (Add / Cancel) ─────────────────────────────
@@ -406,12 +407,12 @@ class CustomPhraseDialog(tk.Toplevel):
         btn_frame.pack(fill="x", side="bottom")
 
         tk.Button(btn_frame, text="Add Phrase", font=("Segoe UI", 14, "bold"),
-                  bg=GREEN_TILE, fg="#FFFFFF", activebackground=GREEN_TILE_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=6,
+                  bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=6,
                   cursor="hand2", command=self._on_add).pack(side="left", padx=(30, 10))
 
         tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 14),
-                  bg=BORDER_COLOR, fg=TEXT_MAIN, activebackground="#CBD5E1",
+                  bg=BORDER_COLOR, fg=TEXT_MAIN, activebackground=T("#CBD5E1"),
                   activeforeground=TEXT_MAIN, relief="flat", padx=24, pady=6,
                   cursor="hand2", command=self.destroy).pack(side="right", padx=(10, 30))
 
@@ -495,8 +496,8 @@ class EmergencyWindow(tk.Toplevel):
                   cursor="hand2", command=self._edit_contact).pack(side="left", padx=6)
 
         tk.Button(right_hdr, text="🚨 SEND ALERT NOW", font=("Segoe UI", 13, "bold"),
-                  bg=RED_BTN, fg="#FFFFFF", activebackground=RED_BTN_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=18, pady=8,
+                  bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=18, pady=8,
                   cursor="hand2", command=self._send_emergency_alert).pack(side="left", padx=6)
 
         # ── Phrase Display Box ───────────────────────────────────────────────
@@ -531,33 +532,33 @@ class EmergencyWindow(tk.Toplevel):
 
         # Back Button
         tk.Button(toolbar, text="◀ Back", font=("Segoe UI", 15, "bold"),
-                  bg=RED_BTN, fg="#FFFFFF", activebackground=RED_BTN_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=10,
+                  bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self.destroy).pack(side="left", padx=6)
 
         # Add Phrase Button
         tk.Button(toolbar, text="+ Add phrase", font=("Segoe UI", 15, "bold"),
-                  bg=GREEN_TILE, fg="#FFFFFF", activebackground=GREEN_TILE_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=10,
+                  bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._add_phrase_dialog).pack(side="left", padx=6)
 
         # Remove Phrase Button
         self.remove_btn = tk.Button(toolbar, text="- Remove phrase", font=("Segoe UI", 15, "bold"),
-                                    bg=RED_BTN, fg="#FFFFFF", activebackground=RED_BTN_HOV,
-                                    activeforeground="#FFFFFF", relief="flat", padx=24, pady=10,
+                                    bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
+                                    activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                                     cursor="hand2", command=self._toggle_remove_mode)
         self.remove_btn.pack(side="left", padx=6)
 
         # Speak TTS Button
         tk.Button(toolbar, text="🔊 Speak", font=("Segoe UI", 15, "bold"),
-                  bg=BLUE_BTN, fg="#FFFFFF", activebackground="#1D4ED8",
-                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=10,
+                  bg=BLUE_BTN, fg=T("#FFFFFF"), activebackground=T("#1D4ED8"),
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._speak_current_phrase).pack(side="right", padx=6)
 
         # Send Message Button
         tk.Button(toolbar, text="📱 Send Alert", font=("Segoe UI", 15, "bold"),
-                  bg=ORANGE_TILE, fg="#FFFFFF", activebackground=ORANGE_TILE_HOV,
-                  activeforeground="#FFFFFF", relief="flat", padx=24, pady=10,
+                  bg=ORANGE_TILE, fg=T("#FFFFFF"), activebackground=ORANGE_TILE_HOV,
+                  activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._send_emergency_alert).pack(side="right", padx=6)
 
     def _refresh_phrases_grid(self):
@@ -583,12 +584,12 @@ class EmergencyWindow(tk.Toplevel):
                 hov = GREEN_TILE_HOV
 
             if self.remove_mode:
-                bg = "#DC2626"
-                hov = "#B91C1C"
+                bg = T("#DC2626")
+                hov = T("#B91C1C")
 
             btn = tk.Button(
                 self.grid_container, text=text, font=("Segoe UI", 15, "bold"),
-                bg=bg, fg="#FFFFFF", activebackground=hov, activeforeground="#FFFFFF",
+                bg=bg, fg=T("#FFFFFF"), activebackground=hov, activeforeground=T("#FFFFFF"),
                 relief="flat", wraplength=260, justify="center", cursor="hand2",
                 command=lambda t=text, item=item: self._on_phrase_click(t, item)
             )
@@ -619,7 +620,7 @@ class EmergencyWindow(tk.Toplevel):
     def _toggle_remove_mode(self):
         self.remove_mode = not self.remove_mode
         if self.remove_mode:
-            self.remove_btn.configure(bg="#D97706", text="Click phrase to remove (Cancel)")
+            self.remove_btn.configure(bg=T("#D97706"), text="Click phrase to remove (Cancel)")
             self.status_var.set("⚠ Removal Mode Active: Click any phrase button to delete it.")
         else:
             self.remove_btn.configure(bg=RED_BTN, text="- Remove phrase")

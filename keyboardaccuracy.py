@@ -1,20 +1,20 @@
-
 import tkinter as tk
+from theme import T          # warm eye-comfort colours (see theme.py)
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json
 
 # ── palette ───────────────────────────────────────────────────────────────────
-BG      = "#F5F6F8"
-SURFACE = "#FFFFFF"
-BORDER  = "#DDE1E7"
-SEP     = "#E5E7EB"
-TEXT    = "#1A1D23"
-MUTED   = "#6B7280"
-ACCENT  = "#2563EB"
-GREEN   = "#16A34A"
-AMBER   = "#D97706"
-PURPLE  = "#7C3AED"
-DANGER  = "#DC2626"
+BG      = T("#F5F6F8")
+SURFACE = T("#FFFFFF")
+BORDER  = T("#DDE1E7")
+SEP     = T("#E5E7EB")
+TEXT    = T("#1A1D23")
+MUTED   = T("#6B7280")
+ACCENT  = T("#2563EB")
+GREEN   = T("#16A34A")
+AMBER   = T("#D97706")
+PURPLE  = T("#7C3AED")
+DANGER  = T("#DC2626")
 
 # ── font stack (larger for fullscreen) ───────────────────────────────────────
 FH  = ("Segoe UI", 15, "bold")   # card heading
@@ -336,7 +336,7 @@ class NotepadWindow(tk.Toplevel):
         self._txt = tk.Text(
             frame, bg=SURFACE, fg=TEXT,
             insertbackground=ACCENT,
-            selectbackground="#BFDBFE", selectforeground=TEXT,
+            selectbackground=T("#BFDBFE"), selectforeground=TEXT,
             font=self._tfont, wrap="word", undo=True,
             padx=32, pady=20, relief="flat", bd=0,
             spacing1=3, spacing3=3)
@@ -548,7 +548,7 @@ class OnScreenKeyboard(tk.Toplevel):
         ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
         for c, ckey in enumerate(ctrl_keys):
             row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color="#334155", fg_color="#F8FAFC", font_size=15)
+            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=T("#F8FAFC"), font_size=15)
             btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
 
         # === RIGHT NUMPAD (3×4 grid) ===
@@ -569,14 +569,14 @@ class OnScreenKeyboard(tk.Toplevel):
             np_frame.rowconfigure(r_idx, weight=1)
             for c_idx, key in enumerate(row):
                 np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color="#1E3A8A", fg_color="#F8FAFC", font_size=18)
+                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=T("#F8FAFC"), font_size=18)
                 btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
 
     def _press(self, key, btn_widget=None):
         if btn_widget:
             orig_bg = btn_widget.cget("bg")
             orig_fg = btn_widget.cget("fg")
-            btn_widget.configure(bg="#16A34A", fg="#FFFFFF", relief="sunken")
+            btn_widget.configure(bg=T("#16A34A"), fg=T("#FFFFFF"), relief="sunken")
             self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
 
         t = self._target

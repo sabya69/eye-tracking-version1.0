@@ -1,4 +1,5 @@
 import tkinter as tk
+from theme import T          # warm eye-comfort colours (see theme.py)
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json, csv
 
@@ -17,17 +18,17 @@ def _try_generate_heatmap(gaze_pts, out_path, screen_w, screen_h, label):
     threading.Thread(target=_worker, daemon=True).start()
 
 # ── palette ───────────────────────────────────────────────────────────────────
-BG      = "#F5F6F8"
-SURFACE = "#FFFFFF"
-BORDER  = "#DDE1E7"
-SEP     = "#E5E7EB"
-TEXT    = "#1A1D23"
-MUTED   = "#6B7280"
-ACCENT  = "#2563EB"
-GREEN   = "#16A34A"
-AMBER   = "#D97706"
-PURPLE  = "#7C3AED"
-DANGER  = "#DC2626"
+BG      = T("#F5F6F8")
+SURFACE = T("#FFFFFF")
+BORDER  = T("#DDE1E7")
+SEP     = T("#E5E7EB")
+TEXT    = T("#1A1D23")
+MUTED   = T("#6B7280")
+ACCENT  = T("#2563EB")
+GREEN   = T("#16A34A")
+AMBER   = T("#D97706")
+PURPLE  = T("#7C3AED")
+DANGER  = T("#DC2626")
 
 # ── font stack (larger for fullscreen) ───────────────────────────────────────
 FH  = ("Segoe UI", 15, "bold")   # card heading
@@ -457,7 +458,7 @@ class NotepadWindow(tk.Toplevel):
         self._txt = tk.Text(
             text_wrapper, bg=SURFACE, fg=TEXT,
             insertbackground=ACCENT,
-            selectbackground="#BFDBFE", selectforeground=TEXT,
+            selectbackground=T("#BFDBFE"), selectforeground=TEXT,
             font=self._tfont, wrap="word", undo=True,
             padx=32, pady=20, relief="flat", bd=0,
             spacing1=3, spacing3=3)
@@ -647,7 +648,7 @@ class OnScreenKeyboard(tk.Frame):
         ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
         for c, ckey in enumerate(ctrl_keys):
             row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color="#334155", fg_color="#F8FAFC", font_size=15)
+            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=T("#F8FAFC"), font_size=15)
             btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
 
         # === RIGHT NUMPAD (3×4 grid) ===
@@ -668,14 +669,14 @@ class OnScreenKeyboard(tk.Frame):
             np_frame.rowconfigure(r_idx, weight=1)
             for c_idx, key in enumerate(row):
                 np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color="#1E3A8A", fg_color="#F8FAFC", font_size=18)
+                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=T("#F8FAFC"), font_size=18)
                 btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
 
     def _press(self, key, btn_widget=None):
         if btn_widget:
             orig_bg = btn_widget.cget("bg")
             orig_fg = btn_widget.cget("fg")
-            btn_widget.configure(bg="#16A34A", fg="#FFFFFF", relief="sunken")
+            btn_widget.configure(bg=T("#16A34A"), fg=T("#FFFFFF"), relief="sunken")
             self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
 
         t = self._target
@@ -739,7 +740,7 @@ try:
             window = Window(uid, str(id(self)), url=None, html=None, js_api=None, width=width, height=height, x=None, y=None,
                           resizable=True, fullscreen=False, min_size=(200, 100), hidden=False,
                           frameless=False, easy_drag=True,
-                          minimized=False, on_top=False, confirm_close=False, background_color='#FFFFFF',
+                          minimized=False, on_top=False, confirm_close=False, background_color=T('#FFFFFF'),
                           transparent=False, text_select=True, localization=None,
                           zoomable=True, draggable=True, vibrancy=False)
             self.window = window
@@ -1127,14 +1128,14 @@ class TextEntryExperiment(tk.Toplevel):
     MEMORIZE_SECS = 15                     # overt: memorization window (15 seconds)
 
     # ── Experiment colours (plain white theme) ──────────────────────────────
-    _C_BG  = "#FFFFFF"   # white background
-    _C_FG  = "#1A1D23"   # dark text
-    _C_ACC = "#2563EB"   # blue accent  (overt)
-    _C_BLU = "#2563EB"   # blue accent  (covert)
-    _C_PUR = "#7C3AED"   # purple accent (random mode)
-    _C_DIM = "#6B7280"   # muted gray
-    _C_FIX = "#000000"   # black fixation cross
-    _C_GRN = "#16A34A"
+    _C_BG  = T("#FFFFFF")   # white background
+    _C_FG  = T("#1A1D23")   # dark text
+    _C_ACC = T("#2563EB")   # blue accent  (overt)
+    _C_BLU = T("#2563EB")   # blue accent  (covert)
+    _C_PUR = T("#7C3AED")   # purple accent (random mode)
+    _C_DIM = T("#6B7280")   # muted gray
+    _C_FIX = T("#000000")   # black fixation cross
+    _C_GRN = T("#16A34A")
 
     # ── Fonts ─────────────────────────────────────────────────────────────────
     _F_TITLE = ("Segoe UI", 32, "bold")
@@ -1302,14 +1303,14 @@ class TextEntryExperiment(tk.Toplevel):
         txt.focus_set()
 
         warn_lbl = tk.Label(inp_row, text="",
-                            bg=self._C_BG, fg="#DC2626", font=self._F_SMALL)
+                            bg=self._C_BG, fg=T("#DC2626"), font=self._F_SMALL)
         warn_lbl.pack(anchor="w", pady=(4, 0))
 
         def _continue():
             name = txt.get("1.0", "end").strip()
             if not name:
                 warn_lbl.config(text="⚠  Please enter your name before continuing.")
-                txt.config(highlightbackground="#DC2626", highlightthickness=2)
+                txt.config(highlightbackground=T("#DC2626"), highlightthickness=2)
                 self.after(2000, lambda: (
                     warn_lbl.config(text=""),
                     txt.config(highlightbackground=self._C_DIM, highlightthickness=1)
@@ -1320,8 +1321,8 @@ class TextEntryExperiment(tk.Toplevel):
 
         tk.Button(inp_row, text="  Continue  →  ",
                   command=_continue,
-                  bg=self._C_ACC, fg="#FFFFFF",
-                  activebackground="#1d4ed8", activeforeground="#FFFFFF",
+                  bg=self._C_ACC, fg=T("#FFFFFF"),
+                  activebackground=T("#1d4ed8"), activeforeground=T("#FFFFFF"),
                   relief="flat",
                   font=("Segoe UI", 13, "bold"),
                   padx=18, pady=8, cursor="hand2").pack(anchor="e", pady=(12, 0))
@@ -1451,7 +1452,7 @@ class TextEntryExperiment(tk.Toplevel):
             c, text="←  Back to Method Selection",
             command=self._show_intro,
             bg=self._C_BG, fg=self._C_DIM,
-            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
             relief="solid", bd=1,
             font=self._F_SMALL, padx=14, pady=6, cursor="hand2"
         )
@@ -1537,7 +1538,7 @@ class TextEntryExperiment(tk.Toplevel):
             c, text="←  Back to Sequence Selection",
             command=lambda: self._show_sequence_mode_selection(method),
             bg=self._C_BG, fg=self._C_DIM,
-            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
             relief="solid", bd=1,
             font=self._F_SMALL, padx=14, pady=6, cursor="hand2"
         )
@@ -1717,7 +1718,7 @@ class TextEntryExperiment(tk.Toplevel):
             c, text="  ⏭  Skip Memorizing  ",
             command=self._ask_skip_memorize,
             bg=self._C_BG, fg=self._C_FG,
-            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
             relief="solid", bd=1, font=("Segoe UI", 14, "bold"),
             padx=24, pady=10, cursor="hand2")
         c.create_window(cx, cy + 190, window=self._mem_skip_btn,
@@ -1740,12 +1741,12 @@ class TextEntryExperiment(tk.Toplevel):
                  font=self._F_SMALL).pack(pady=(0, 18))
         row = tk.Frame(box, bg=self._C_BG); row.pack()
         tk.Button(row, text="  Yes, skip  ", command=self._skip_memorize_yes,
-                  bg=self._C_GRN, fg="white", activebackground="#15803D",
+                  bg=self._C_GRN, fg="white", activebackground=T("#15803D"),
                   activeforeground="white", relief="flat",
                   font=("Segoe UI", 15, "bold"), padx=22, pady=10,
                   cursor="hand2").pack(side="left", padx=12)
         tk.Button(row, text="  No, keep memorizing  ", command=self._skip_memorize_no,
-                  bg=self._C_BG, fg=self._C_FG, activebackground="#EFEFEF",
+                  bg=self._C_BG, fg=self._C_FG, activebackground=T("#EFEFEF"),
                   relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
                   padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
         self._mem_skip_box = box
@@ -1931,7 +1932,7 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Button(inp_row, text="  ✔  Save & Next  ",
                   command=_save,
                   bg=self._C_BG, fg=self._C_FG,
-                  activebackground="#EFEFEF", activeforeground=self._C_FG,
+                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1,
                   font=("Segoe UI", 13, "bold"),
                   padx=18, pady=8, cursor="hand2").pack(anchor="e", pady=(10, 0))
@@ -2043,7 +2044,7 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Button(inp_row, text="  ✔  Save & Next  ",
                   command=_save,
                   bg=self._C_BG, fg=self._C_FG,
-                  activebackground="#EFEFEF", activeforeground=self._C_FG,
+                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1,
                   font=("Segoe UI", 13, "bold"),
                   padx=18, pady=8, cursor="hand2").pack(anchor="e", pady=(10, 0))
@@ -2123,7 +2124,7 @@ class TextEntryExperiment(tk.Toplevel):
             bar_y = cy + 170
             frac  = 1.0 - (secs / self.REST_DURATION)
             c.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + 12,
-                                fill="#E5E7EB", outline="", tags="rest_bar")
+                                fill=T("#E5E7EB"), outline="", tags="rest_bar")
             c.create_rectangle(bar_x, bar_y, bar_x + int(bar_w * frac), bar_y + 12,
                                fill=self._C_ACC, outline="", tags="rest_bar")
 
@@ -2169,7 +2170,7 @@ class TextEntryExperiment(tk.Toplevel):
             c, text="  ⏭  Skip Rest  ",
             command=self._ask_skip_rest,
             bg=self._C_BG, fg=self._C_FG,
-            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
             relief="solid", bd=1, font=("Segoe UI", 14, "bold"),
             padx=24, pady=10, cursor="hand2")
         self._skip_btn_win = c.create_window(cx, cy + 235, window=self._skip_btn,
@@ -2192,12 +2193,12 @@ class TextEntryExperiment(tk.Toplevel):
                  font=self._F_SMALL).pack(pady=(0, 18))
         row = tk.Frame(box, bg=self._C_BG); row.pack()
         tk.Button(row, text="  Yes, skip  ", command=self._skip_rest_yes,
-                  bg=self._C_GRN, fg="white", activebackground="#15803D",
+                  bg=self._C_GRN, fg="white", activebackground=T("#15803D"),
                   activeforeground="white", relief="flat",
                   font=("Segoe UI", 15, "bold"), padx=22, pady=10,
                   cursor="hand2").pack(side="left", padx=12)
         tk.Button(row, text="  No, keep resting  ", command=self._skip_rest_no,
-                  bg=self._C_BG, fg=self._C_FG, activebackground="#EFEFEF",
+                  bg=self._C_BG, fg=self._C_FG, activebackground=T("#EFEFEF"),
                   relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
                   padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
         self._skip_box = box
@@ -2393,7 +2394,7 @@ class TextEntryExperiment(tk.Toplevel):
         else:
             c.create_text(cx, cy - 60,
                           text="⚠  Could not save CSV",
-                          fill="#DC2626", font=self._F_HEAD, anchor="center")
+                          fill=T("#DC2626"), font=self._F_HEAD, anchor="center")
             c.create_text(cx, cy,
                           text=err_msg,
                           fill=self._C_DIM, font=self._F_SMALL, anchor="center",
@@ -2404,14 +2405,14 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Button(btns, text="  ↺  Restart  ",
                   command=self._show_name_entry,
                   bg=self._C_BG, fg=self._C_FG,
-                  activebackground="#EFEFEF", activeforeground=self._C_FG,
+                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1,
                   font=("Segoe UI", 13, "bold"),
                   padx=16, pady=8, cursor="hand2").pack(side="left", padx=6)
         tk.Button(btns, text="  ✕  Close  ",
                   command=self.destroy,
                   bg=self._C_BG, fg=self._C_FG,
-                  activebackground="#EFEFEF", activeforeground=self._C_FG,
+                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1, font=("Segoe UI", 13),
                   padx=16, pady=8, cursor="hand2").pack(side="left", padx=6)
 
