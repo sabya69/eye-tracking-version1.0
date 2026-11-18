@@ -555,6 +555,44 @@ class AttentionTracker:
         sy = np.clip((gy-ymin)/(ymax-ymin+1e-6), 0, 1)
         return sx*self.screen_w, sy*self.screen_h
 
+    # -- Head-pose status feed (read by launcher.py during the memorize phase) -- #
+    POSE_FILE        = os.path.join(os.path.dirname(os.path.abspath(__file__)), "head_pose_status.json")
+    POSE_WRITE_EVERY = 0.15    # seconds between writes (keeps disk I/O tiny)
+    EDGE_MARGIN      = 0.04    # face this close to the frame edge = "out of frame"
+
+    def _publish_pose(self, face_ok, lm):
+        """Write {status, ok, t} to head_pose_status.json (atomic, throttled).
+
+        status is one of:
+          OK            face visible, centred and facing forward
+          NO_FACE       no face detected (left the frame / covered)
+          OUT_OF_FRAME  face is touching the edge of the camera frame
+          TURNED LEFT / TURNED RIGHT / LOOKING UP / LOOKING DOWN
+        """
+        now = time.time()
+        if now - getattr(self, "_pose_last_write", 0.0) < self.POSE_WRITE_EVERY:
+            return
+        self._pose_last_write = now
+
+        if not face_ok:
+            status = "NO_FACE"
+        else:
+            m = self.EDGE_MARGIN
+            # forehead, chin, left cheek, right cheek
+            if (lm[234].x < m or lm[454].x > 1 - m or
+                    lm[10].y < m or lm[152].y > 1 - m):
+                status = "OUT_OF_FRAME"
+            else:
+                status = self.head_status if self.head_status != "FORWARD" else "OK"
+
+        try:
+            tmp = self.POSE_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"status": status, "ok": status == "OK", "t": now}, f)
+            os.replace(tmp, self.POSE_FILE)
+        except Exception:
+            pass   # never let the status feed break tracking
+
     def _head_pose(self, matrix):
         R = np.array(matrix).reshape(4,4)[:3,:3]
         yaw   = np.degrees(np.arctan2(R[1][0], R[0][0]))
@@ -822,6 +860,9 @@ class AttentionTracker:
 
             else:
                 pass
+
+            # -- Publish head-pose status for the launcher (memorize-phase beep) -- #
+            self._publish_pose(face_ok, res.face_landmarks[0] if face_ok else None)
 
             # FPS
             now2 = time.time()

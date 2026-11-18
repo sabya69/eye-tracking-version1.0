@@ -1186,6 +1186,14 @@ class TextEntryExperiment(tk.Toplevel):
         self._participant_name  = ""     # entered on the name screen
         self._after_id          = None
         self._typing_frame      = None
+        # ── Memorize-phase extras (skip button + head-pose beep) ───────────────
+        self._mem_prompt_open   = False
+        self._mem_resume_secs   = None
+        self._mem_skipped       = False
+        self._mem_skip_btn      = None
+        self._mem_skip_box      = None
+        self._pose_after_id     = None
+        self._pose_last_beep    = 0.0
         # ── Per-trial keystroke tracking ───────────────────────────────────────
         self._trial_start_time  = None
         self._spacebar_count    = 0
@@ -1221,6 +1229,7 @@ class TextEntryExperiment(tk.Toplevel):
     def _use_frame(self):
         """Hide canvas, return a fresh typing frame."""
         self._cancel_after()
+        self._stop_memorize_extras()
         self._canvas.pack_forget()
         self._canvas.delete("all")
         if self._typing_frame:
@@ -1234,6 +1243,7 @@ class TextEntryExperiment(tk.Toplevel):
     def _clear(self):
         self._cancel_after()
         self._destroy_rest_widgets()
+        self._stop_memorize_extras()
         self._canvas.delete("all")
 
     def _reset_trial_tracking(self):
@@ -1652,6 +1662,9 @@ class TextEntryExperiment(tk.Toplevel):
         if secs is None:
             secs = self.MEMORIZE_SECS
             self._use_canvas(); self._clear(); self.update_idletasks()
+            self._mem_skipped = False            # reset for this trial
+            self._create_memorize_skip_button()  # optional "Skip memorizing"
+            self._start_pose_monitor()           # beep if head leaves the frame
 
         c  = self._canvas
         cx, cy = self._cx(), self._cy()
@@ -1685,9 +1698,147 @@ class TextEntryExperiment(tk.Toplevel):
             tags="timer", anchor="center")
 
         if secs > 0:
-            self._after_id = self.after(1000, lambda: self._show_overt_memorize(secs - 1))
+            self._after_id = self.after(1000, lambda: self._mem_tick(secs - 1))
         else:
             self._show_overt_typing()
+
+    # ── Skip-memorizing feature (optional, user decides) ─────────────────────
+    def _mem_tick(self, secs):
+        """Advance the memorize countdown, unless the skip prompt is open."""
+        if self._mem_prompt_open:
+            self._mem_resume_secs = secs      # continue from here on "No"
+            return
+        self._show_overt_memorize(secs)
+
+    def _create_memorize_skip_button(self):
+        c = self._canvas
+        cx, cy = self._cx(), self._cy()
+        self._mem_skip_btn = tk.Button(
+            c, text="  ⏭  Skip Memorizing  ",
+            command=self._ask_skip_memorize,
+            bg=self._C_BG, fg=self._C_FG,
+            activebackground="#EFEFEF", activeforeground=self._C_FG,
+            relief="solid", bd=1, font=("Segoe UI", 14, "bold"),
+            padx=24, pady=10, cursor="hand2")
+        c.create_window(cx, cy + 190, window=self._mem_skip_btn,
+                        anchor="center", tags="mem_skip")
+
+    def _ask_skip_memorize(self):
+        """Pop up 'Skip memorizing?' — the countdown is held until answered."""
+        if self._mem_prompt_open:
+            return
+        self._mem_prompt_open = True
+        c = self._canvas
+        cx, cy = self._cx(), self._cy()
+        box = tk.Frame(c, bg=self._C_BG, highlightbackground=self._C_FG,
+                       highlightthickness=2, padx=40, pady=28)
+        tk.Label(box, text="Skip memorizing and go straight to typing?",
+                 bg=self._C_BG, fg=self._C_FG,
+                 font=("Segoe UI", 18, "bold")).pack(pady=(0, 6))
+        tk.Label(box, text="The countdown is on hold until you choose.",
+                 bg=self._C_BG, fg=self._C_DIM,
+                 font=self._F_SMALL).pack(pady=(0, 18))
+        row = tk.Frame(box, bg=self._C_BG); row.pack()
+        tk.Button(row, text="  Yes, skip  ", command=self._skip_memorize_yes,
+                  bg=self._C_GRN, fg="white", activebackground="#15803D",
+                  activeforeground="white", relief="flat",
+                  font=("Segoe UI", 15, "bold"), padx=22, pady=10,
+                  cursor="hand2").pack(side="left", padx=12)
+        tk.Button(row, text="  No, keep memorizing  ", command=self._skip_memorize_no,
+                  bg=self._C_BG, fg=self._C_FG, activebackground="#EFEFEF",
+                  relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
+                  padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
+        self._mem_skip_box = box
+        c.create_window(cx, cy, window=box, anchor="center", tags="mem_skip")
+        c.tag_raise("mem_skip")
+
+    def _close_memorize_prompt(self):
+        self._mem_prompt_open = False
+        box = self._mem_skip_box
+        if box is not None:
+            try: box.destroy()
+            except Exception: pass
+            self._mem_skip_box = None
+
+    def _skip_memorize_no(self):
+        self._close_memorize_prompt()
+        secs = self._mem_resume_secs
+        self._mem_resume_secs = None
+        if secs is not None:                  # tick was held -> continue now
+            self._show_overt_memorize(secs)
+
+    def _skip_memorize_yes(self):
+        self._close_memorize_prompt()
+        self._mem_resume_secs = None
+        self._mem_skipped = True
+        self._cancel_after()
+        self._show_overt_typing()
+
+    # ── Head-pose guard: beep while the head is out of position ──────────────
+    _POSE_FILE        = os.path.join(os.path.dirname(os.path.abspath(__file__)), "head_pose_status.json")
+    POSE_POLL_MS      = 250     # how often to read the tracker's status
+    POSE_BEEP_EVERY   = 1.2     # seconds between warning beeps
+    POSE_STALE_SEC    = 2.0     # ignore status older than this (tracker not running)
+    _POSE_MESSAGES    = {
+        "NO_FACE"      : "Face not detected — move back into the camera frame",
+        "OUT_OF_FRAME" : "Face is at the edge — move to the centre of the frame",
+        "TURNED LEFT"  : "Head turned left — face the screen",
+        "TURNED RIGHT" : "Head turned right — face the screen",
+        "LOOKING UP"   : "Head tilted up — face the screen",
+        "LOOKING DOWN" : "Head tilted down — face the screen",
+    }
+
+    def _start_pose_monitor(self):
+        self._pose_last_beep = 0.0
+        self._poll_pose()
+
+    def _poll_pose(self):
+        import time
+        status = None
+        try:
+            with open(self._POSE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if time.time() - float(data.get("t", 0)) <= self.POSE_STALE_SEC:
+                status = data.get("status")
+        except Exception:
+            status = None            # no tracker / unreadable -> stay silent
+
+        bad = status is not None and status != "OK"
+        try:
+            self._canvas.delete("pose_warn")
+            if bad:
+                self._canvas.create_text(
+                    self._cx(), self._cy() + 110,
+                    text="⚠  " + self._POSE_MESSAGES.get(status, "Keep your head inside the frame"),
+                    fill=DANGER, font=("Segoe UI", 16, "bold"),
+                    anchor="center", tags="pose_warn")
+        except Exception:
+            pass
+        if bad and time.time() - self._pose_last_beep >= self.POSE_BEEP_EVERY:
+            self._pose_last_beep = time.time()
+            self._beep_async(900, 220)
+
+        self._pose_after_id = self.after(self.POSE_POLL_MS, self._poll_pose)
+
+    def _stop_memorize_extras(self):
+        """Stop the pose beep and remove skip widgets (called on phase change)."""
+        if self._pose_after_id:
+            try: self.after_cancel(self._pose_after_id)
+            except Exception: pass
+            self._pose_after_id = None
+        for name in ("_mem_skip_box", "_mem_skip_btn"):
+            w = getattr(self, name, None)
+            if w is not None:
+                try: w.destroy()
+                except Exception: pass
+                setattr(self, name, None)
+        self._mem_prompt_open = False
+        self._mem_resume_secs = None
+        try:
+            self._canvas.delete("mem_skip")
+            self._canvas.delete("pose_warn")
+        except Exception:
+            pass
 
     # ─────────────────────────────────────────────────────────────────────────
     #  PHASE 3-B — OVERT: type from memory
@@ -1773,6 +1924,7 @@ class TextEntryExperiment(tk.Toplevel):
                 "char_count"         : len(typed),
                 "word_count"         : len(typed.split()) if typed else 0,
                 "letter_timestamps"  : json.dumps(self._keystroke_log),
+                "memorize_skipped"   : self._mem_skipped,
             })
             self._advance()
 
@@ -2195,6 +2347,7 @@ class TextEntryExperiment(tk.Toplevel):
             "trial_start_time", "trial_end_time",
             "typing_duration_sec", "spacebar_count", "backspace_count",
             "char_count", "word_count", "letter_timestamps",
+            "memorize_skipped",
         ]
         try:
             with open(filepath, "w", newline="", encoding="utf-8") as f:
