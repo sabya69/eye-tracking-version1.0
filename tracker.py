@@ -139,6 +139,49 @@ class AttentionTracker:
         print("|  ESC -> End session + report                 |")
         print("+----------------------------------------------+\n")
 
+    # -- Calibration sanity limits (raw iris spread across the 4 corners) ----- #
+    # Healthy calibrations in this project's history: x 0.016-0.040, y 0.006-0.042.
+    # The bad one that froze the cursor had x = 0.0025 (eyes never really moved).
+    MIN_CALIB_SPREAD_X = 0.008
+    MIN_CALIB_SPREAD_Y = 0.004
+    CALIB_PAD          = 0.02    # padding added each side of the 10-90 percentile window
+    CALIB_MAX_ATTEMPTS = 2
+    MIN_FALLBACK_HALF_X = 0.035  # used only if calibration still too narrow after retries
+    MIN_FALLBACK_HALF_Y = 0.025
+
+    # -- Pause flag (written by launcher rest screen) -------------------------- #
+    PAUSE_FLAG_PATH    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_paused.flag")
+    PAUSE_FLAG_MAX_AGE = 600     # a rest break never lasts this long -> flag is stale
+
+    def _clear_stale_pause_flag(self, max_age=0):
+        """Delete tracker_paused.flag if older than max_age seconds (0 = always).
+
+        The launcher creates the flag when a rest screen starts and removes it when the
+        countdown ends. If the launcher is closed mid-rest, or the file got committed to
+        git and pulled onto another machine, the flag survives and run() stays on
+        'TRACKER PAUSED' forever (no cursor movement). Returns True if removed."""
+        try:
+            if not os.path.exists(self.PAUSE_FLAG_PATH):
+                return False
+            age = time.time() - os.path.getmtime(self.PAUSE_FLAG_PATH)
+            if age >= max_age:
+                os.remove(self.PAUSE_FLAG_PATH)
+                print(f"[WARN] Removed stale tracker_paused.flag (age {age:.0f}s) - tracker resumed.")
+                return True
+        except Exception as e:
+            print(f"[WARN] Could not clear pause flag: {e}")
+        return False
+
+    def _calib_is_valid(self, gc):
+        """True if a saved/new gaze_calib window is wide enough to be usable."""
+        try:
+            xmin, xmax, ymin, ymax = [float(v) for v in gc]
+        except Exception:
+            return False
+        pad2 = 2 * self.CALIB_PAD
+        return ((xmax - xmin) - pad2 >= self.MIN_CALIB_SPREAD_X and
+                (ymax - ymin) - pad2 >= self.MIN_CALIB_SPREAD_Y)
+
     def _get_mp_timestamp(self):
         """Returns a strictly monotonically increasing integer timestamp in ms for MediaPipe."""
         ts = int(time.time() * 1000)
@@ -192,34 +235,48 @@ class AttentionTracker:
                 user_embedding = self._compute_face_embedding(res.face_landmarks[0], w, h)
                 break
                 
+        force_recal = False
         if user_embedding:
             profile_path = "calibration_profiles.json"
             if os.path.exists(profile_path):
                 try:
                     with open(profile_path, "r") as f:
                         profiles = json.load(f)
-                        
+
+                    # Newest VALID matching profile wins. (Old code took the first match,
+                    # so an old/bad profile shadowed every newer calibration forever.)
+                    best = None
                     for profile in profiles:
                         saved_emb = np.array(profile["embedding"])
-                        # Prevent broadcasting errors if the embedding size changed in newer versions
                         if len(user_embedding) != len(saved_emb):
                             continue
-                        
                         mse = np.mean((np.array(user_embedding) - saved_emb) ** 2)
-                        # Stricter threshold to avoid falsely identifying different users as the same person
-                        if mse < 0.0015:
-                            print(f"[CAL] Returning user detected! MSE: {mse:.5f}")
-                            self.EAR_TH_L = profile["EAR_TH_L"]
-                            self.EAR_TH_R = profile["EAR_TH_R"]
-                            self.gaze_calib = profile["gaze_calib"]
-                            
-                            ov = frame.copy()
-                            cv2.rectangle(ov, (0,0), (w,h), (20,20,20), -1)
-                            cv2.addWeighted(ov, 0.8, frame, 0.2, 0, frame)
-                            cv2.putText(frame, "Welcome Back! Calibration Skipped.", (w//2-300, h//2), cv2.FONT_HERSHEY_DUPLEX, 1.0, (100,255,100), 2)
-                            cv2.imshow(WIN, frame)
-                            cv2.waitKey(1500)
-                            
+                        if mse >= 0.0015:
+                            continue
+                        if not self._calib_is_valid(profile.get("gaze_calib")):
+                            print(f"[CAL] Ignoring saved profile from {profile.get('timestamp')}: "
+                                  f"gaze calibration too narrow - will recalibrate.")
+                            continue
+                        best = (profile, mse)
+
+                    if best is not None:
+                        profile, mse = best
+                        print(f"[CAL] Returning user detected! MSE: {mse:.5f}")
+                        self.EAR_TH_L = profile["EAR_TH_L"]
+                        self.EAR_TH_R = profile["EAR_TH_R"]
+                        self.gaze_calib = profile["gaze_calib"]
+
+                        ov = frame.copy()
+                        cv2.rectangle(ov, (0,0), (w,h), (20,20,20), -1)
+                        cv2.addWeighted(ov, 0.8, frame, 0.2, 0, frame)
+                        cv2.putText(frame, "Welcome Back! Calibration Skipped.", (w//2-300, h//2), cv2.FONT_HERSHEY_DUPLEX, 1.0, (100,255,100), 2)
+                        cv2.putText(frame, "Press R now to recalibrate", (w//2-170, h//2+45), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200,200,200), 1)
+                        cv2.imshow(WIN, frame)
+                        k = cv2.waitKey(2000) & 0xFF
+                        if k in (ord('r'), ord('R')):
+                            print("[CAL] Recalibration requested.")
+                            force_recal = True
+                        else:
                             import sys
                             if sys.platform == "win32":
                                 import ctypes
@@ -229,6 +286,7 @@ class AttentionTracker:
                             return
                 except Exception as e:
                     print(f"[WARN] Error reading profiles: {e}")
+
 
         # -- Phase 0.5: Face Position & Height Guidance ----------------------- #
         print("[CAL] Phase 0.5: Face positioning & height alignment ...")
@@ -390,120 +448,162 @@ class AttentionTracker:
         print("[CAL] Phase 2: Gaze corner mapping ...")
         corners = [("TOP-LEFT",(0.05,0.08)),("TOP-RIGHT",(0.95,0.08)),
                    ("BOTTOM-LEFT",(0.05,0.92)),("BOTTOM-RIGHT",(0.95,0.92))]
+        calib_ok = False
         all_gx, all_gy = [], []
-        for label, (tx,ty) in corners:
-            buffer = []
-            focus_start = None
-            REQUIRED_FOCUS_TIME = 1.2  # 1.2 seconds of steady focus required
+        for attempt in range(1, self.CALIB_MAX_ATTEMPTS + 1):
+            all_gx, all_gy = [], []
+            for label, (tx,ty) in corners:
+                buffer = []
+                focus_start = None
+                REQUIRED_FOCUS_TIME = 1.2  # 1.2 seconds of steady focus required
             
-            while True:
-                ok, frame = self.cap.read()
-                if not ok: continue
-                frame = cv2.flip(frame, 1)
-                h, w = frame.shape[:2]
-                ov = frame.copy()
-                cv2.rectangle(ov, (0,0), (w,h), (20,20,20), -1)
-                cv2.addWeighted(ov, 0.5, frame, 0.5, 0, frame)
+                while True:
+                    ok, frame = self.cap.read()
+                    if not ok: continue
+                    frame = cv2.flip(frame, 1)
+                    h, w = frame.shape[:2]
+                    ov = frame.copy()
+                    cv2.rectangle(ov, (0,0), (w,h), (20,20,20), -1)
+                    cv2.addWeighted(ov, 0.5, frame, 0.5, 0, frame)
                 
-                dx, dy = int(tx*w), int(ty*h)
+                    dx, dy = int(tx*w), int(ty*h)
                 
-                # Base ball marker
-                cv2.circle(frame, (dx,dy), 18, (0,255,0), -1)
-                cv2.circle(frame, (dx,dy), 22, (255,255,255), 2)
+                    # Base ball marker
+                    cv2.circle(frame, (dx,dy), 18, (0,255,0), -1)
+                    cv2.circle(frame, (dx,dy), 22, (255,255,255), 2)
                 
-                cv2.putText(frame, f"Focus on  {label}", (w//2-180, h//2),
-                            cv2.FONT_HERSHEY_DUPLEX, 0.95, (0,220,255), 2)
+                    cv2.putText(frame, f"Focus on  {label}", (w//2-180, h//2),
+                                cv2.FONT_HERSHEY_DUPLEX, 0.95, (0,220,255), 2)
 
-                rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                try:
-                    res = self.detector.detect_for_video(mp_img, self._get_mp_timestamp())
-                except Exception as _e:
-                    print(f"[WARN] MP detection error in Phase 2: {_e}")
-                    continue
+                    rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                    try:
+                        res = self.detector.detect_for_video(mp_img, self._get_mp_timestamp())
+                    except Exception as _e:
+                        print(f"[WARN] MP detection error in Phase 2: {_e}")
+                        continue
                 
-                if res and res.face_landmarks:
-                    lm = res.face_landmarks[0]
-                    lgx = (lm[self.LEFT_IRIS[0]].x  + lm[self.LEFT_IRIS[2]].x)  / 2
-                    rgx = (lm[self.RIGHT_IRIS[0]].x + lm[self.RIGHT_IRIS[2]].x) / 2
-                    lgy = (lm[self.LEFT_IRIS[0]].y  + lm[self.LEFT_IRIS[2]].y)  / 2
-                    rgy = (lm[self.RIGHT_IRIS[0]].y + lm[self.RIGHT_IRIS[2]].y) / 2
-                    gx = (lgx + rgx) / 2
-                    gy = (lgy + rgy) / 2
+                    if res and res.face_landmarks:
+                        lm = res.face_landmarks[0]
+                        lgx = (lm[self.LEFT_IRIS[0]].x  + lm[self.LEFT_IRIS[2]].x)  / 2
+                        rgx = (lm[self.RIGHT_IRIS[0]].x + lm[self.RIGHT_IRIS[2]].x) / 2
+                        lgy = (lm[self.LEFT_IRIS[0]].y  + lm[self.LEFT_IRIS[2]].y)  / 2
+                        rgy = (lm[self.RIGHT_IRIS[0]].y + lm[self.RIGHT_IRIS[2]].y) / 2
+                        gx = (lgx + rgx) / 2
+                        gy = (lgy + rgy) / 2
                     
-                    buffer.append((gx, gy))
-                    if len(buffer) > 15:
-                        buffer.pop(0)
+                        buffer.append((gx, gy))
+                        if len(buffer) > 15:
+                            buffer.pop(0)
                     
-                    # Determine if eye gaze is steadily fixating
-                    if len(buffer) == 15:
-                        std_x = np.std([p[0] for p in buffer])
-                        std_y = np.std([p[1] for p in buffer])
+                        # Determine if eye gaze is steadily fixating
+                        if len(buffer) == 15:
+                            std_x = np.std([p[0] for p in buffer])
+                            std_y = np.std([p[1] for p in buffer])
                         
-                        if std_x < 0.007 and std_y < 0.007:
-                            if focus_start is None:
-                                focus_start = time.time()
-                            elapsed = time.time() - focus_start
+                            if std_x < 0.007 and std_y < 0.007:
+                                if focus_start is None:
+                                    focus_start = time.time()
+                                elapsed = time.time() - focus_start
                             
-                            # Draw the "Focusing" indicator circle around the ball
-                            frac = min(1.0, elapsed / REQUIRED_FOCUS_TIME)
+                                # Draw the "Focusing" indicator circle around the ball
+                                frac = min(1.0, elapsed / REQUIRED_FOCUS_TIME)
                             
-                            # Outer pulsing focus circle (yellow/cyan) showing active focus detection
-                            r_pulse = int(32 + 6 * np.sin(time.time() * 10))
-                            cv2.circle(frame, (dx, dy), r_pulse, (0, 255, 255), 2)
+                                # Outer pulsing focus circle (yellow/cyan) showing active focus detection
+                                r_pulse = int(32 + 6 * np.sin(time.time() * 10))
+                                cv2.circle(frame, (dx, dy), r_pulse, (0, 255, 255), 2)
                             
-                            # Filled progress ring around the ball
-                            cv2.ellipse(frame, (dx, dy), (42, 42), -90, 0, int(360 * frac), (0, 255, 100), 4)
+                                # Filled progress ring around the ball
+                                cv2.ellipse(frame, (dx, dy), (42, 42), -90, 0, int(360 * frac), (0, 255, 100), 4)
                             
-                            cv2.putText(frame, f"FOCUSING... {int(frac*100)}%", (dx-60, dy+65),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+                                cv2.putText(frame, f"FOCUSING... {int(frac*100)}%", (dx-60, dy+65),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
                             
-                            if elapsed >= REQUIRED_FOCUS_TIME:
-                                # Completed focus on this ball!
-                                all_gx.extend([p[0] for p in buffer])
-                                all_gy.extend([p[1] for p in buffer])
-                                # Brief green confirmation pulse
-                                cv2.circle(frame, (dx, dy), 50, (0, 255, 0), 4)
-                                cv2.imshow(WIN, frame)
-                                cv2.waitKey(200)
-                                break
+                                if elapsed >= REQUIRED_FOCUS_TIME:
+                                    # Completed focus on this ball!
+                                    all_gx.extend([p[0] for p in buffer])
+                                    all_gy.extend([p[1] for p in buffer])
+                                    # Brief green confirmation pulse
+                                    cv2.circle(frame, (dx, dy), 50, (0, 255, 0), 4)
+                                    cv2.imshow(WIN, frame)
+                                    cv2.waitKey(200)
+                                    break
+                            else:
+                                focus_start = None
                         else:
                             focus_start = None
                     else:
                         focus_start = None
-                else:
-                    focus_start = None
                 
-                cv2.imshow(WIN, frame)
-                if cv2.waitKey(1) & 0xFF == 27: return
+                    cv2.imshow(WIN, frame)
+                    if cv2.waitKey(1) & 0xFF == 27: return
 
-        if len(all_gx) > 20:
-            self.gaze_calib = [
-                np.percentile(all_gx,10)-0.02, np.percentile(all_gx,90)+0.02,
-                np.percentile(all_gy,10)-0.02, np.percentile(all_gy,90)+0.02,
-            ]
-            print(f"[CAL] Gaze calib X:{self.gaze_calib[:2]}  Y:{self.gaze_calib[2:]}")
-        else:
-            print("[CAL] Not enough gaze data -- using defaults")
+            if len(all_gx) > 20:
+                gx_lo, gx_hi = np.percentile(all_gx,10), np.percentile(all_gx,90)
+                gy_lo, gy_hi = np.percentile(all_gy,10), np.percentile(all_gy,90)
+                P = self.CALIB_PAD
+                self.gaze_calib = [gx_lo-P, gx_hi+P, gy_lo-P, gy_hi+P]
+                print(f"[CAL] Gaze calib X:{self.gaze_calib[:2]}  Y:{self.gaze_calib[2:]}  "
+                      f"(raw spread x={gx_hi-gx_lo:.4f} y={gy_hi-gy_lo:.4f}, attempt {attempt})")
+                if self._calib_is_valid(self.gaze_calib):
+                    calib_ok = True
+                    break
+                print("[WARN] Eyes barely moved between corners - calibration too narrow.")
+                ok, fr = self.cap.read()
+                if ok:
+                    fr = cv2.flip(fr, 1)
+                    fh, fw = fr.shape[:2]
+                    ov = fr.copy()
+                    cv2.rectangle(ov, (0,0), (fw,fh), (20,20,20), -1)
+                    cv2.addWeighted(ov, 0.7, fr, 0.3, 0, fr)
+                    cv2.putText(fr, "Eyes barely moved - let's try again", (fw//2-250, fh//2-10), cv2.FONT_HERSHEY_DUPLEX, 0.85, (0,165,255), 2)
+                    cv2.putText(fr, "Keep your head still, move only your EYES", (fw//2-250, fh//2+30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (220,220,220), 1)
+                    cv2.imshow(WIN, fr)
+                    cv2.waitKey(2500)
+            else:
+                print("[CAL] Not enough gaze data")
 
-        if user_embedding:
+        if not calib_ok:
+            if len(all_gx) > 20:
+                # Still too narrow: widen around the measured centre so the cursor is not
+                # hypersensitive, and do NOT save this as a profile.
+                cx = (self.gaze_calib[0] + self.gaze_calib[1]) / 2
+                cy = (self.gaze_calib[2] + self.gaze_calib[3]) / 2
+                self.gaze_calib = [cx - self.MIN_FALLBACK_HALF_X, cx + self.MIN_FALLBACK_HALF_X,
+                                   cy - self.MIN_FALLBACK_HALF_Y, cy + self.MIN_FALLBACK_HALF_Y]
+                print("[WARN] Calibration still too narrow - using widened fallback, profile NOT saved.")
+            else:
+                print("[CAL] Not enough gaze data -- using defaults, profile NOT saved.")
+
+        if user_embedding and calib_ok:
             try:
                 profiles = []
                 profile_path = "calibration_profiles.json"
                 if os.path.exists(profile_path):
                     with open(profile_path, "r") as f:
                         profiles = json.load(f)
-                
-                profiles.append({
+
+                # Replace older profiles of the same face instead of stacking duplicates
+                kept = []
+                for p in profiles:
+                    try:
+                        e = np.array(p["embedding"])
+                        if len(e) == len(user_embedding) and \
+                           np.mean((np.array(user_embedding) - e) ** 2) < 0.0015:
+                            continue
+                    except Exception:
+                        pass
+                    kept.append(p)
+                kept.append({
                     "embedding": user_embedding,
                     "EAR_TH_L": self.EAR_TH_L,
                     "EAR_TH_R": self.EAR_TH_R,
-                    "gaze_calib": self.gaze_calib,
+                    "gaze_calib": [float(v) for v in self.gaze_calib],
                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
-                
+
                 with open(profile_path, "w") as f:
-                    json.dump(profiles, f, indent=4)
+                    json.dump(kept, f, indent=4)
                 print("[CAL] Saved new calibration profile.")
             except Exception as e:
                 print(f"[WARN] Could not save profile: {e}")
@@ -685,7 +785,11 @@ class AttentionTracker:
         self.prev_time     = time.time()
         print(f"[INFO] Tracking started at {datetime.datetime.now().strftime('%H:%M:%S')}")
         # Pause flag file path (created/deleted by launcher rest screen)
-        _pause_flag = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_paused.flag")
+        _pause_flag = self.PAUSE_FLAG_PATH
+        # A brand-new tracker process can never be mid-rest: any flag here is left over
+        # from a crashed/closed session (or pulled in via git) -> remove it.
+        self._clear_stale_pause_flag(0)
+        _was_paused = False
 
         while True:
             ok, frame = self.cap.read()
@@ -695,7 +799,10 @@ class AttentionTracker:
             h, w      = frame.shape[:2]
 
             # -- PAUSE CHECK: skip all processing when rest flag is active -- #
-            if os.path.exists(_pause_flag):
+            if os.path.exists(_pause_flag) and not self._clear_stale_pause_flag(self.PAUSE_FLAG_MAX_AGE):
+                if not _was_paused:
+                    print("[INFO] Tracker paused (tracker_paused.flag present).")
+                    _was_paused = True
                 ov = frame.copy()
                 cv2.rectangle(ov, (0, 0), (w, h), (15, 15, 15), -1)
                 cv2.addWeighted(ov, 0.65, frame, 0.35, 0, frame)
@@ -714,6 +821,9 @@ class AttentionTracker:
                 self.prev_time = time.time()
                 continue
 
+            if _was_paused:
+                print("[INFO] Tracker resumed.")
+                _was_paused = False
             rgb       = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_img    = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             try:

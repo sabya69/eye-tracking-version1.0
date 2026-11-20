@@ -215,6 +215,12 @@ class Launcher(tk.Tk):
             try: os.remove(flag_file)
             except: pass
 
+        # A leftover rest-pause flag would keep the tracker frozen on "TRACKER PAUSED"
+        stale_pause = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_paused.flag")
+        if os.path.exists(stale_pause):
+            try: os.remove(stale_pause)
+            except: pass
+
         with open(script, "w") as f:
             f.write("from tracker import AttentionTracker\n"
                     "import os\n"
@@ -291,6 +297,11 @@ class Launcher(tk.Tk):
     def destroy(self):
         if self._proc and self._proc.poll() is None:
             self._proc.terminate()
+        try:
+            _pf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_paused.flag")
+            if os.path.exists(_pf): os.remove(_pf)
+        except Exception:
+            pass
         super().destroy()
 
 
@@ -2065,6 +2076,16 @@ class TextEntryExperiment(tk.Toplevel):
     #  REST SCREEN — pause between trials with audio countdown
     # ─────────────────────────────────────────────────────────────────────────
     REST_DURATION = 30   # seconds of rest before next trial
+
+    def destroy(self):
+        # Never leave the tracker paused if the experiment is closed during a rest break
+        try:
+            if os.path.exists(self._PAUSE_FLAG):
+                os.remove(self._PAUSE_FLAG)
+        except Exception:
+            pass
+        super().destroy()
+
     _PAUSE_FLAG   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_paused.flag")
 
     def _show_rest_screen(self, secs=None):
