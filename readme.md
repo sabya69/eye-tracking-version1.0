@@ -141,16 +141,23 @@ attention-tracker/
 ### Install Dependencies
 
 ```
-pip install -r requirements.txt
+py -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 ### Run the Project
 
 ```
-python attention_tracker.py
+python main.py
 ```
 
 Press **ESC** to exit the application.
+
+`pyautogui` is required for system mouse control. On a new laptop, recalibrate
+for that laptop's camera; if a copied `calibration_profiles.json` causes
+calibration to be skipped, rename that file and start the tracker again.
 
 ---
 

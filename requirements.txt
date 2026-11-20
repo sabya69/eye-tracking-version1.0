@@ -6,3 +6,4 @@ seaborn
 matplotlib
 scipy
 tkwebview2
+pyautogui
