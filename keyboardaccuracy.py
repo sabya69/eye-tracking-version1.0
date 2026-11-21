@@ -1,5 +1,5 @@
 import tkinter as tk
-from theme import T          # warm eye-comfort colours (see theme.py)
+from theme import T, TXT_LIGHT   # eye-comfort colours (see theme.py)
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json
 
@@ -548,7 +548,7 @@ class OnScreenKeyboard(tk.Toplevel):
         ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
         for c, ckey in enumerate(ctrl_keys):
             row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=T("#F8FAFC"), font_size=15)
+            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=TXT_LIGHT, font_size=15)
             btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
 
         # === RIGHT NUMPAD (3×4 grid) ===
@@ -569,7 +569,7 @@ class OnScreenKeyboard(tk.Toplevel):
             np_frame.rowconfigure(r_idx, weight=1)
             for c_idx, key in enumerate(row):
                 np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=T("#F8FAFC"), font_size=18)
+                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=TXT_LIGHT, font_size=18)
                 btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
 
     def _press(self, key, btn_widget=None):
