@@ -1,5 +1,8 @@
 import tkinter as tk
 from theme import T          # warm eye-comfort colours (see theme.py)
+from PIL import ImageTk
+from neo_ui import (NeuButton, NeuText, NeuScrollbar, GlassPanel, GlassCard, Backdrop,
+                    OnScreenKeyboard, render_glass)   # neumorphic + glass kit (see neo_ui.py)
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json, csv
 
@@ -45,6 +48,70 @@ def _sep(parent):
     tk.Frame(parent, bg=SEP, height=1).pack(fill="x")
 
 
+class _Dot:
+    """Status dot on the home canvas; answers to .config(fg=...) like the old Label."""
+    def __init__(self, color):
+        self.color, self.canvas = color, None
+
+    def config(self, **kw):
+        if "fg" in kw:
+            self.color = kw["fg"]
+        if self.canvas is not None:
+            try: self.canvas.itemconfigure("status_dot", fill=self.color)
+            except Exception: pass
+    configure = config
+
+
+class _Slot:
+    """A widget living on the home canvas that still answers to pack()/pack_forget()."""
+    def __init__(self, widget):
+        self.widget, self.visible, self.canvas, self.item = widget, False, None, None
+
+    def attach(self, canvas, x, y, anchor):
+        self.canvas = canvas
+        self.item = canvas.create_window(x, y, window=self.widget, anchor=anchor,
+                                         state="normal" if self.visible else "hidden")
+
+    def _apply(self):
+        if self.canvas is not None and self.item is not None:
+            try: self.canvas.itemconfigure(self.item, state="normal" if self.visible else "hidden")
+            except Exception: pass
+
+    def pack(self, *a, **k):
+        self.visible = True; self._apply()
+
+    def pack_forget(self):
+        self.visible = False; self._apply()
+
+
+class _GlassPrompt:
+    """Glass dialog drawn onto the experiment canvas (replaces the old bordered Frame box)."""
+    def __init__(self, canvas, bd, cx, cy, title, sub, buttons, tag, fg, dim):
+        self.c, self.tag, self.btns = canvas, tag, []
+        w, h = 800, 300
+        bd.draw_glass(cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2, r=32, tags=tag)
+        canvas.create_text(cx, cy - 78, text=title, fill=fg, font=("Segoe UI", 20, "bold"), tags=tag)
+        canvas.create_text(cx, cy - 36, text=sub, fill=dim, font=("Segoe UI", 12), tags=tag)
+        for text, cmd, variant in buttons:
+            self.btns.append(NeuButton(canvas, text=text, command=cmd, variant=variant,
+                                       font=("Segoe UI", 15, "bold"), padx=26, pady=12))
+        for b in self.btns:
+            b.update_idletasks()
+        gap = 18
+        total = sum(b.winfo_reqwidth() for b in self.btns) + gap * (len(self.btns) - 1)
+        x = cx - total // 2
+        for b in self.btns:
+            canvas.create_window(x, cy + 50, window=b, anchor="w", tags=tag)
+            x += b.winfo_reqwidth() + gap
+
+    def destroy(self):
+        for b in self.btns:
+            try: b.destroy()
+            except Exception: pass
+        try: self.c.delete(self.tag)
+        except Exception: pass
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  LAUNCHER
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,82 +140,77 @@ class Launcher(tk.Tk):
 
 
     def _build(self):
-        # ── header ────────────────────────────────────────────────────────────
-        hdr = tk.Frame(self, bg=BG, padx=48, pady=30)
-        hdr.pack(fill="x")
-
-        lf = tk.Frame(hdr, bg=BG)
-        lf.pack(side="left")
-        tk.Label(lf, text="", bg=BG, fg=TEXT,
-                 font=FT).pack(anchor="w")
-        
-
-        rf = tk.Frame(hdr, bg=BG)
-        rf.pack(side="left")
+        # ── glass home screen: one canvas, soft colour backdrop, frosted cards ─────
         self._usage_v = tk.StringVar(value="Total Usage: 0h 0m")
-        tk.Label(rf, textvariable=self._usage_v,
-                 bg=BG, fg=ACCENT, font=FM).pack(anchor="e")
         self._clock_v = tk.StringVar()
-        tk.Label(rf, textvariable=self._clock_v,
-                 bg=BG, fg=MUTED, font=FM).pack(anchor="e")
-        tk.Label(rf, text="Group 10 ---  Mini Project",
-                 bg=BG, fg=MUTED, font=FS).pack(anchor="e")
+        self._sv      = tk.StringVar(value="  Initialising …")
+        self._dot     = _Dot(BORDER)
 
-        _sep(self)
-
-        # ── card grid ─────────────────────────────────────────────────────────
-        wrapper = tk.Frame(self, bg=BG)
-        wrapper.pack(fill="both", expand=True)
-
-        body = tk.Frame(wrapper, bg=BG)
-        body.place(relx=0.5, rely=0.5, anchor="center")
+        c = tk.Canvas(self, highlightthickness=0, bd=0)
+        c.place(x=0, y=0, relwidth=1, relheight=1)
+        self._home  = c
+        self._bdrop = Backdrop(c, base=BG)
 
         self.modules = [
-            ("Emergency Communication", "Preset & custom emergency phrase alerts to contact number", DANGER, self._launch_emergency),
-            ("Eye Tracker", "Calibrate & start gaze tracking",  GREEN, self._start_tracker),
-            ("Notepad","Text editor  ·  save / open files", AMBER,  lambda: NotepadWindow(self)),
-            ("Text-Entry Experiment", "Gaze-based text entry  ·  measure typing speed & accuracy", PURPLE, self._launch_text_experiment),
+            ("Emergency Communication", "Preset & custom emergency phrase alerts to contact number", DANGER, self._launch_emergency, "🚨"),
+            ("Eye Tracker", "Calibrate & start gaze tracking",  GREEN, self._start_tracker, "👁"),
+            ("Notepad","Text editor  ·  save / open files", AMBER,  lambda: NotepadWindow(self), "📝"),
+            ("Text-Entry Experiment", "Gaze-based text entry  ·  measure typing speed & accuracy", PURPLE, self._launch_text_experiment, "⌨"),
         ]
-        
- 
-        self.cards = []
-        for i, (name, desc, color, cmd) in enumerate(self.modules):
-            row = i // 2
-            col = i % 2
-            card = _Card(body, name, desc, color, cmd)
-            card.grid(row=row, column=col, padx=20, pady=20, sticky="nsew")
-            self.cards.append(card)
+        self.cards = [GlassCard(c, n, d, col, cmd, icon=ic, width=420, height=190,
+                                title_font=("Segoe UI", 18, "bold"), sub_font=("Segoe UI", 12))
+                      for (n, d, col, cmd, ic) in self.modules]
 
-        body.grid_columnconfigure(0, weight=1)
-        body.grid_columnconfigure(1, weight=1)
-        body.grid_rowconfigure(0, weight=1)
-        body.grid_rowconfigure(1, weight=1)
+        self._stop_btn = _Slot(NeuButton(c, text="Stop Tracker", command=self._stop, variant="danger",
+                                         font=("Segoe UI", 15, "bold"), padx=22, pady=8))
 
-             
+        for var, tag in ((self._usage_v, "usage_txt"), (self._clock_v, "clock_txt"), (self._sv, "status_txt")):
+            var.trace_add("write", lambda *_a, v=var, t=tag: self._set_item_text(t, v.get()))
 
-        
-
-        _sep(self)
-
-        # ── status bar ────────────────────────────────────────────────────────
-        sb = tk.Frame(self, bg=BG, padx=48, pady=14)
-        sb.pack(fill="x")
-
-        self._dot = tk.Label(sb, text="●", fg=BORDER, bg=BG, font=FB)
-        self._dot.pack(side="left")
-
-        self._sv = tk.StringVar(value="  Initialising …")
-        tk.Label(sb, textvariable=self._sv, bg=BG, fg=MUTED,
-                 font=FB).pack(side="left")
-
-        self._stop_btn = tk.Button(
-            sb, text="Stop Tracker", command=self._stop,
-            bg=BG   , fg=DANGER, activebackground=BG,
-            activeforeground=DANGER, relief="flat", bd=0,
-            font=("Segoe UI", 16, "bold"), padx=16, pady=8, cursor="hand2")
-
+        c.bind("<<NeoBackdropChanged>>", lambda e: self._layout_home())
         self.bind("<Escape>", lambda e: self.destroy())
         self._refresh_stats()
+
+    def _set_item_text(self, tag, text):
+        try: self._home.itemconfigure(tag, text=text)
+        except Exception: pass
+
+    def _layout_home(self):
+        c = self._home
+        W, H = c.winfo_width(), c.winfo_height()
+        if W < 400 or H < 400:
+            return
+        c.delete("all")
+        self._bdrop.draw()
+        bd, m = self._bdrop, 40
+        # header bar
+        hy1, hy2 = 28, 118
+        bd.draw_glass(m, hy1, W - m, hy2, r=30)
+        hc = (hy1 + hy2) // 2
+        c.create_oval(m + 36, hc - 7, m + 50, hc + 7, fill=ACCENT, outline="")
+        c.create_text(m + 66, hc, anchor="w", text="Group 10  ·  Mini Project", fill=TEXT, font=("Segoe UI", 15, "bold"))
+        c.create_text(W - m - 36, hc - 14, anchor="e", text=self._usage_v.get(), fill=ACCENT,
+                      font=FM, tags="usage_txt")
+        c.create_text(W - m - 36, hc + 14, anchor="e", text=self._clock_v.get(), fill=MUTED,
+                      font=FM, tags="clock_txt")
+        # status bar
+        sy1, sy2 = H - 108, H - 28
+        bd.draw_glass(m, sy1, W - m, sy2, r=30)
+        sc = (sy1 + sy2) // 2
+        c.create_oval(m + 34, sc - 8, m + 50, sc + 8, fill=self._dot.color, outline="", tags="status_dot")
+        self._dot.canvas = c
+        c.create_text(m + 64, sc, anchor="w", text=self._sv.get(), fill=MUTED, font=FB, tags="status_txt")
+        self._stop_btn.attach(c, W - m - 30, sc, "e")
+        # 2 x 2 glass cards, centred between the bars
+        gap = 36
+        cw = int(min(560, (W - 2 * m - gap - 80) / 2))
+        ch = int(min(230, (sy1 - hy2 - 3 * gap) / 2))
+        gx = (W - (2 * cw + gap)) // 2
+        gy = hy2 + (sy1 - hy2 - (2 * ch + gap)) // 2
+        for i, card in enumerate(self.cards):
+            x = gx + (i % 2) * (cw + gap)
+            y = gy + (i // 2) * (ch + gap)
+            c.create_window(x, y, window=card, width=cw, height=ch, anchor="nw")
 
     # ── stats & reports ───────────────────────────────────────────────────────
     def _refresh_stats(self):
@@ -306,92 +368,13 @@ class Launcher(tk.Tk):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  MODULE CARD  (button tile)
-# ─────────────────────────────────────────────────────────────────────────────
-class _Card(tk.Frame):
-    W = 380;  H = 150
-
-    def __init__(self, parent, name, desc, color, cmd):
-        super().__init__(parent, bg=SURFACE, width=self.W, height=self.H,
-                         highlightbackground=BORDER, highlightthickness=1,
-                         cursor="hand2")
-        self.pack_propagate(False)
-        self._color = color
-        self._cmd   = cmd
-
-        bar = tk.Frame(self, bg=color, width=7)
-        bar.pack(side="left", fill="y")
-
-        inner = tk.Frame(self, bg=SURFACE, padx=24, pady=22)
-        inner.pack(fill="both", expand=True)
-
-        self._nl = tk.Label(inner, text=name, bg=SURFACE, fg=TEXT, font=FH, anchor="w")
-        self._nl.pack(fill="x")
-
-        tk.Frame(inner, bg=SEP, height=1).pack(fill="x", pady=8)
-
-        self._dl = tk.Label(inner, text=desc, bg=SURFACE, fg=MUTED, font=FB, anchor="w",
-                            wraplength=320, justify="left")
-        self._dl.pack(fill="x")
-
-        for w in (self, bar, inner, self._nl, self._dl):
-            w.bind("<Enter>",    self._on)
-            w.bind("<Leave>",    self._off)
-            w.bind("<Button-1>", lambda e: self._cmd())
-
-    def _on(self, _=None):
-        self.configure(highlightbackground=self._color, bg=SURFACE)
-        self._nl.configure(fg=self._color)
-
-    def _off(self, _=None):
-        self.configure(highlightbackground=BORDER, bg=SURFACE)
-        self._nl.configure(fg=TEXT)
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  APP ICON CARD  (smaller button tile for corners)
-# ─────────────────────────────────────────────────────────────────────────────
-class _AppIcon(tk.Frame):
-    W = 180;  H = 60
-
-    def __init__(self, parent, name, color, cmd):
-        super().__init__(parent, bg=SURFACE, width=self.W, height=self.H,
-                         highlightbackground=BORDER, highlightthickness=1,
-                         cursor="hand2")
-        self.pack_propagate(False)
-        self._color = color
-        self._cmd   = cmd
-
-        bar = tk.Frame(self, bg=color, width=5)
-        bar.pack(side="left", fill="y")
-
-        inner = tk.Frame(self, bg=SURFACE, padx=12, pady=12)
-        inner.pack(fill="both", expand=True)
-
-        self._nl = tk.Label(inner, text=name, bg=SURFACE, fg=TEXT, font=("Segoe UI", 11, "bold"), anchor="center")
-        self._nl.pack(fill="both", expand=True)
-
-        for w in (self, bar, inner, self._nl):
-            w.bind("<Enter>",    self._on)
-            w.bind("<Leave>",    self._off)
-            w.bind("<Button-1>", lambda e: self._cmd())
-
-    def _on(self, _=None):
-        self.configure(highlightbackground=self._color, bg=SURFACE)
-        self._nl.configure(fg=self._color)
-
-    def _off(self, _=None):
-        self.configure(highlightbackground=BORDER, bg=SURFACE)
-        self._nl.configure(fg=TEXT)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 #  NOTEPAD  — with integrated on-screen virtual keyboard
 # ─────────────────────────────────────────────────────────────────────────────
 class NotepadWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
         self.title("Notepad")
-        self.configure(bg=SURFACE)
+        self.configure(bg=BG)
         self.state("zoomed")
         self._path = None
         self._kb_win = None          # keep reference to keyboard window
@@ -408,77 +391,66 @@ class NotepadWindow(tk.Toplevel):
         fm = tk.Menu(menu, bg=SURFACE, fg=TEXT,
                      activebackground=ACCENT, activeforeground=SURFACE, tearoff=0)
         menu.add_cascade(label="File", menu=fm)
-        
-        
         fm.add_command(label="Open Keyboard", command=self._open_keyboard, accelerator="Ctrl+Shift+K")
         fm.add_separator()
         fm.add_command(label="Exit", command=self.destroy)
 
-
-
-        tb = tk.Frame(self, bg=SURFACE, pady=8, padx=16)
-        tb.pack(fill="x")
+        # glass toolbar
+        panel = GlassPanel(self, padx=14, pady=6)
+        panel.pack(fill="x", padx=18, pady=(14, 4))
+        tb, bb = panel.body, panel.body_bg
 
         def tbtn(text, cmd, fg=TEXT, bold=False):
             f = ("Segoe UI", 11, "bold") if bold else ("Segoe UI", 11)
-            b = tk.Button(tb, text=text, command=cmd, bg=SURFACE, fg=fg,
-                          activebackground=BG, activeforeground=fg,
-                          relief="flat", bd=0, font=f, padx=12, pady=4,
-                          cursor="hand2")
-            b.pack(side="left", padx=2)
+            NeuButton(tb, text=text, command=cmd, fg=fg, font=f, padx=14, pady=6,
+                      radius=12, depth=3).pack(side="left", padx=3)
 
         tbtn("Alphabetical Keyboard", lambda: self._open_keyboard("alpha"), fg=PURPLE, bold=True)
         tbtn("Normal Keyboard", lambda: self._open_keyboard("normal"), fg=PURPLE, bold=True)
         tbtn("Cluster Keyboard", lambda: self._open_keyboard("cluster"), fg=PURPLE, bold=True)
 
-        tk.Label(tb, text="|", bg=SURFACE, fg=BORDER, font=FB).pack(side="left", padx=8)
-        tk.Label(tb, text="Size", bg=SURFACE, fg=MUTED, font=FS).pack(side="left")
+        tk.Label(tb, text="|", bg=bb, fg=BORDER, font=FB).pack(side="left", padx=8)
+        tk.Label(tb, text="Size", bg=bb, fg=MUTED, font=FS).pack(side="left")
         self._fsize = tk.IntVar(value=25)
         tk.Spinbox(tb, from_=8, to=32, textvariable=self._fsize, width=3,
-                   relief="flat", bg=BG, fg=TEXT, font=FM,
+                   relief="flat", bg=BG, fg=TEXT, font=FM, buttonbackground=BG,
                    command=self._resize).pack(side="left", padx=8)
 
         self._wrap_v = tk.BooleanVar(value=True)
         tk.Checkbutton(tb, text="Wrap", variable=self._wrap_v,
-                       command=self._toggle_wrap, bg=SURFACE, fg=MUTED,
-                       activebackground=SURFACE, selectcolor=SURFACE,
+                       command=self._toggle_wrap, bg=bb, fg=MUTED,
+                       activebackground=bb, activeforeground=MUTED, selectcolor=BG,
                        font=FS).pack(side="left")
 
-        tk.Button(tb, text="Stop Tracker", command=self.master._stop,
-                  bg=SURFACE, fg=DANGER, activebackground=BG,
-                  activeforeground=DANGER, relief="flat", bd=0,
-                  font=("Segoe UI", 11, "bold"), padx=12, pady=4,
-                  cursor="hand2").pack(side="right", padx=8)
+        NeuButton(tb, text="Stop Tracker", command=self.master._stop, variant="danger",
+                  font=("Segoe UI", 11, "bold"), padx=14, pady=6, radius=12,
+                  depth=3).pack(side="right", padx=6)
 
         self._sv = tk.StringVar(value="Ready")
-        tk.Label(tb, textvariable=self._sv, bg=SURFACE, fg=MUTED,
+        tk.Label(tb, textvariable=self._sv, bg=bb, fg=MUTED,
                  font=FS).pack(side="right", padx=12)
 
-        _sep(self)
-
-        frame = tk.Frame(self, bg=SURFACE)
+        frame = tk.Frame(self, bg=BG)
         frame.pack(fill="both", expand=True)
 
-        text_wrapper = tk.Frame(frame, bg=SURFACE)
+        text_wrapper = tk.Frame(frame, bg=BG)
         text_wrapper.place(relx=0, rely=0, relwidth=1, relheight=0.33)
 
         self.kb_wrapper = tk.Frame(frame, bg=BG)
         self.kb_wrapper.place(relx=0, rely=0.33, relwidth=1, relheight=0.67)
 
         self._tfont = tkfont.Font(family="Consolas", size=16)
-        self._txt = tk.Text(
-            text_wrapper, bg=SURFACE, fg=TEXT,
+        vsb = NeuScrollbar(text_wrapper)
+        vsb.pack(side="right", fill="y", padx=(0, 18), pady=14)
+        self._txt = NeuText(
+            text_wrapper, fg=TEXT,
             insertbackground=ACCENT,
             selectbackground=T("#BFDBFE"), selectforeground=TEXT,
             font=self._tfont, wrap="word", undo=True,
-            padx=32, pady=20, relief="flat", bd=0,
-            spacing1=3, spacing3=3)
-
-        vsb = tk.Scrollbar(text_wrapper, command=self._txt.yview,
-                           relief="flat", bg=BG, troughcolor=BG)
+            padx=22, pady=14, spacing1=3, spacing3=3)
+        vsb.configure(command=self._txt.yview)
         self._txt.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
-        self._txt.pack(fill="both", expand=True)
+        self._txt.pack(fill="both", expand=True, padx=(18, 0), pady=(8, 8))
         self._txt.bind("<KeyRelease>", self._update_sv)
 
         self.bind("<Control-s>",       lambda e: self._save())
@@ -553,175 +525,8 @@ class NotepadWindow(tk.Toplevel):
         self._sv.set(f"{len(c)} chars  ·  {len(c.split()) if c else 0} words")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  BUILT-IN ON-SCREEN KEYBOARD  (fallback when virtual_keyboard.py not found)
-# ─────────────────────────────────────────────────────────────────────────────
-class OnScreenKeyboard(tk.Frame):
-    LAYOUTS = {
-        "normal": {
-            "row1": ["Q","W","E","R","T","Y","U","I","O","P"],
-            "row2": ["A","S","D","F","G","H","J","K","L"],
-            "row3": ["Z","X","C","V","B","N","M"],
-        },
-        "alpha": {
-            "row1": ["A","B","C","D","E","F","G","H","I","J"],
-            "row2": ["K","L","M","N","O","P","Q","R","S"],
-            "row3": ["T","U","V","W","X","Y","Z"],
-        },
-        "cluster": {
-            "row1": ["E","T","A","O","I","F","G","Y","P","B"],
-            "row2": ["N","S","H","R","D","V","K","J","X"],
-            "row3": ["L","C","U","M","W","Q","Z"],
-        }
-    }
-
-    def __init__(self, master, target: tk.Text, layout="normal", notepad_app=None):
-        super().__init__(master, bg=BG)
-        self._target = target
-        self.notepad_app = notepad_app
-        self._shift  = False
-        self._caps   = False
-        self._layout = layout
-        self.set_layout(layout)
-
-    def set_layout(self, layout):
-        self._layout = layout if layout in self.LAYOUTS else "normal"
-        for widget in self.winfo_children():
-            widget.destroy()
-        self._build()
-
-    def _build(self):
-        main_frame = tk.Frame(self, bg=BG, padx=8, pady=8)
-        main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
-
-        def make_btn(parent, text, bg_color=SURFACE, fg_color=TEXT, font_size=18):
-            btn = tk.Button(
-                parent, text=text, font=("Segoe UI", font_size, "bold"),
-                bg=bg_color, fg=fg_color, activebackground=ACCENT,
-                activeforeground=SURFACE, relief="flat", bd=0,
-                highlightbackground=BORDER, highlightthickness=1,
-                cursor="hand2"
-            )
-            btn.configure(command=lambda k=text, b=btn: self._press(k, b))
-            return btn
-
-        alpha_data = self.LAYOUTS.get(self._layout, self.LAYOUTS["normal"])
-
-        # ── 4-Row Grid with Numpad on the Right ────────────────────────────
-        content = tk.Frame(main_frame, bg=BG)
-        content.pack(fill="both", expand=True)
-        content.columnconfigure(0, weight=8)   # left keyboard area
-        content.columnconfigure(1, weight=2)   # numpad
-        content.rowconfigure(0, weight=1)
-
-        # === LEFT KEYBOARD AREA (4 rows) ===
-        left = tk.Frame(content, bg=BG)
-        left.grid(row=0, column=0, sticky="nsew")
-        for i in range(4):
-            left.rowconfigure(i, weight=1)
-        left.columnconfigure(0, weight=1)
-
-        # ── ROW 1: 10 letter keys ────────────────────────────────────────
-        row1 = tk.Frame(left, bg=BG)
-        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 6))
-        row1.rowconfigure(0, weight=1)
-        for c, key in enumerate(alpha_data["row1"]):
-            row1.columnconfigure(c, weight=1)
-            btn = make_btn(row1, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 2: 9 letter keys ─────────────────────────────────────────
-        row2 = tk.Frame(left, bg=BG)
-        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 6))
-        row2.rowconfigure(0, weight=1)
-        for c, key in enumerate(alpha_data["row2"]):
-            row2.columnconfigure(c, weight=1)
-            btn = make_btn(row2, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 3: 7 letter keys in a horizontal row ─────────────────────
-        row3 = tk.Frame(left, bg=BG)
-        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
-        row3.rowconfigure(0, weight=1)
-
-        for c, key in enumerate(alpha_data["row3"]):
-            row3.columnconfigure(c, weight=1)
-            btn = make_btn(row3, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 4: 7 control keys in a horizontal row ────────────────────
-        row4 = tk.Frame(left, bg=BG)
-        row4.grid(row=3, column=0, sticky="nsew")
-        row4.rowconfigure(0, weight=1)
-
-        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
-        for c, ckey in enumerate(ctrl_keys):
-            row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=T("#F8FAFC"), font_size=15)
-            btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
-
-        # === RIGHT NUMPAD (3×4 grid) ===
-        np_outer = tk.Frame(content, bg=BG, highlightbackground=BORDER,
-                            highlightthickness=1, padx=6, pady=4)
-        np_outer.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        np_outer.rowconfigure(1, weight=1)
-        np_outer.columnconfigure(0, weight=1)
-
-        tk.Label(np_outer, text="NUMBERS", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
-
-        np_frame = tk.Frame(np_outer, bg=BG)
-        np_frame.grid(row=1, column=0, sticky="nsew")
-
-        num_grid = [["1","2","3"], ["4","5","6"], ["7","8","9"], [".","0","?"]]
-        for r_idx, row in enumerate(num_grid):
-            np_frame.rowconfigure(r_idx, weight=1)
-            for c_idx, key in enumerate(row):
-                np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=T("#F8FAFC"), font_size=18)
-                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
-
-    def _press(self, key, btn_widget=None):
-        if btn_widget:
-            orig_bg = btn_widget.cget("bg")
-            orig_fg = btn_widget.cget("fg")
-            btn_widget.configure(bg=T("#16A34A"), fg=T("#FFFFFF"), relief="sunken")
-            self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
-
-        t = self._target
-        if key in ("Save & next", "Enter"):
-            if getattr(self, 'notepad_app', None) and hasattr(self.notepad_app, '_save'):
-                self.notepad_app._save()
-            elif t:
-                t.insert("insert", "\n")
-        elif key in ("⌫", "Backspace"):
-            if t:
-                pos = t.index("insert")
-                if pos != "1.0":
-                    t.delete("insert-1c", "insert")
-        elif key == "Delete":
-            if t:
-                t.delete("1.0", "end")
-        elif key == "|◄":
-            if t: t.mark_set("insert", "1.0")
-        elif key == "◄":
-            if t:
-                pos = t.index("insert")
-                if pos != "1.0":
-                    t.mark_set("insert", "insert-1c")
-        elif key == "►":
-            if t: t.mark_set("insert", "insert+1c")
-        elif key == "►|":
-            if t: t.mark_set("insert", "end-1c")
-        elif key == "Space":
-            if t: t.insert("insert", " ")
-        else:
-            if t: t.insert("insert", key)
-        if t:
-            t.see("insert")
-            t.focus_set()
+# The on-screen keyboard now lives in neo_ui.py (OnScreenKeyboard = NeoKeyboard).
+# 'Delete' (clear everything) moved to an isolated top-right 'Clear all' key with a 2-tap confirm.
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CUSTOM WEBVIEW2 WIDGET — to bypass E_ACCESSDENIED by using a custom user data folder
@@ -1216,6 +1021,7 @@ class TextEntryExperiment(tk.Toplevel):
         # Canvas used by display-only phases
         self._canvas = tk.Canvas(self, bg=self._C_BG, highlightthickness=0)
         self._canvas.pack(fill="both", expand=True)
+        self._bd = Backdrop(self._canvas, base=self._C_BG)   # soft glass backdrop (see neo_ui.py)
 
         # ── Heatmap tracking ───────────────────────────────────────────────────
         self._exp_start_time  = None   # datetime when typing phase begins
@@ -1244,6 +1050,7 @@ class TextEntryExperiment(tk.Toplevel):
         self._stop_memorize_extras()
         self._canvas.pack_forget()
         self._canvas.delete("all")
+        self._bd.draw()
         if self._typing_frame:
             try: self._typing_frame.destroy()
             except Exception: pass
@@ -1257,6 +1064,7 @@ class TextEntryExperiment(tk.Toplevel):
         self._destroy_rest_widgets()
         self._stop_memorize_extras()
         self._canvas.delete("all")
+        self._bd.draw()
 
     def _reset_trial_tracking(self):
         """Reset per-trial keystroke counters before each typing phase."""
@@ -1305,7 +1113,7 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Label(inp_row, text="Your Name:",
                  bg=self._C_BG, fg=self._C_DIM, font=self._F_SMALL).pack(anchor="w")
 
-        txt = tk.Text(inp_row, bg=self._C_BG, fg=self._C_FG,
+        txt = NeuText(inp_row, fg=self._C_FG,
                       insertbackground=self._C_FG,
                       font=("Segoe UI", 22), height=2, wrap="word",
                       relief="flat", padx=14, pady=12,
@@ -1321,20 +1129,20 @@ class TextEntryExperiment(tk.Toplevel):
             name = txt.get("1.0", "end").strip()
             if not name:
                 warn_lbl.config(text="⚠  Please enter your name before continuing.")
-                txt.config(highlightbackground=T("#DC2626"), highlightthickness=2)
+                txt.set_error(True)
                 self.after(2000, lambda: (
                     warn_lbl.config(text=""),
-                    txt.config(highlightbackground=self._C_DIM, highlightthickness=1)
+                    txt.set_error(False)
                 ))
                 return
             self._participant_name = name
             self._show_intro()
 
-        tk.Button(inp_row, text="  Continue  →  ",
+        NeuButton(inp_row, text="  Continue  →  ",
                   command=_continue,
                   bg=self._C_ACC, fg=T("#FFFFFF"),
                   activebackground=T("#1d4ed8"), activeforeground=T("#FFFFFF"),
-                  relief="flat",
+                  relief="flat", variant="accent",
                   font=("Segoe UI", 13, "bold"),
                   padx=18, pady=8, cursor="hand2").pack(anchor="e", pady=(12, 0))
 
@@ -1347,6 +1155,7 @@ class TextEntryExperiment(tk.Toplevel):
     #  PHASE 0 — INTRO  (method selection)
     # ─────────────────────────────────────────────────────────────────────────
     def _show_intro(self):
+        self._bd.set_strength(1.0)
         self._use_canvas()
         self._clear()
         self.update_idletasks()
@@ -1368,18 +1177,8 @@ class TextEntryExperiment(tk.Toplevel):
 
         # ── Method buttons ────────────────────────────────────────────────────
         def method_btn(parent, title, sub, color, cmd):
-            outer = tk.Frame(parent, bg=self._C_DIM, padx=1, pady=1, cursor="hand2")
-            inner = tk.Frame(outer, bg=self._C_BG, padx=28, pady=18)
-            inner.pack()
-            lbl_t = tk.Label(inner, text=title, bg=self._C_BG, fg=color,
-                             font=("Segoe UI", 18, "bold"))
-            lbl_t.pack()
-            lbl_s = tk.Label(inner, text=sub, bg=self._C_BG, fg=self._C_DIM,
-                             font=self._F_SMALL, wraplength=190, justify="center")
-            lbl_s.pack(pady=(6, 0))
-            for w in (outer, inner, lbl_t, lbl_s):
-                w.bind("<Button-1>", lambda e: cmd())
-            return outer
+            return GlassCard(parent, title, sub, color, cmd, width=330, height=200, orb=False,
+                             title_font=("Segoe UI", 21, "bold"), sub_font=self._F_SMALL)
 
         overt_f = method_btn(c,
             "OVERT",
@@ -1404,6 +1203,7 @@ class TextEntryExperiment(tk.Toplevel):
     #  PHASE 0-B — SEQUENCE MODE SELECTION (Fixed vs Random)
     # ─────────────────────────────────────────────────────────────────────────
     def _show_sequence_mode_selection(self, method):
+        self._bd.set_strength(1.0)
         self._use_canvas()
         self._clear()
         self.update_idletasks()
@@ -1424,20 +1224,8 @@ class TextEntryExperiment(tk.Toplevel):
                       fill=self._C_FG, font=self._F_BODY, anchor="center")
 
         def mode_card(parent, title, sub, color, cmd):
-            outer = tk.Frame(parent, bg=self._C_DIM, padx=1, pady=1, cursor="hand2")
-            inner = tk.Frame(outer, bg=self._C_BG, padx=32, pady=24)
-            inner.pack()
-            lbl_t = tk.Label(inner, text=title, bg=self._C_BG, fg=color,
-                             font=("Segoe UI", 20, "bold"))
-            lbl_t.pack()
-            lbl_s = tk.Label(inner, text=sub, bg=self._C_BG, fg=self._C_DIM,
-                             font=self._F_SMALL, wraplength=230, justify="center")
-            lbl_s.pack(pady=(8, 0))
-            for widget in (outer, inner, lbl_t, lbl_s):
-                widget.bind("<Button-1>", lambda e: cmd())
-                widget.bind("<Enter>", lambda e, o=outer: o.config(bg=color))
-                widget.bind("<Leave>", lambda e, o=outer: o.config(bg=self._C_DIM))
-            return outer
+            return GlassCard(parent, title, sub, color, cmd, width=370, height=250, orb=False,
+                             title_font=("Segoe UI", 22, "bold"), sub_font=self._F_SMALL)
 
         fixed_f = mode_card(
             c,
@@ -1455,11 +1243,11 @@ class TextEntryExperiment(tk.Toplevel):
             lambda: self._show_keyboard_selection(method, "random")
         )
 
-        c.create_window(cx - 190, cy + 70, window=fixed_f, anchor="center")
-        c.create_window(cx + 190, cy + 70, window=random_f, anchor="center")
+        c.create_window(cx - 200, cy + 100, window=fixed_f, anchor="center")
+        c.create_window(cx + 200, cy + 100, window=random_f, anchor="center")
 
         # Back button
-        back_btn = tk.Button(
+        back_btn = NeuButton(
             c, text="←  Back to Method Selection",
             command=self._show_intro,
             bg=self._C_BG, fg=self._C_DIM,
@@ -1467,7 +1255,7 @@ class TextEntryExperiment(tk.Toplevel):
             relief="solid", bd=1,
             font=self._F_SMALL, padx=14, pady=6, cursor="hand2"
         )
-        c.create_window(cx, cy + 220, window=back_btn, anchor="center")
+        c.create_window(cx, cy + 265, window=back_btn, anchor="center")
 
         c.create_text(cx, h - 32,
                       text="Press  Esc  to close",
@@ -1477,6 +1265,7 @@ class TextEntryExperiment(tk.Toplevel):
     #  PHASE 0-C — KEYBOARD SELECTION
     # ─────────────────────────────────────────────────────────────────────────
     def _show_keyboard_selection(self, method, sequence_mode):
+        self._bd.set_strength(1.0)
         self._use_canvas()
         self._clear()
         self.update_idletasks()
@@ -1521,20 +1310,8 @@ class TextEntryExperiment(tk.Toplevel):
         ]
 
         def kb_card(parent, title, sub, color, cmd):
-            outer = tk.Frame(parent, bg=self._C_DIM, padx=1, pady=1, cursor="hand2")
-            inner = tk.Frame(outer, bg=self._C_BG, padx=26, pady=20)
-            inner.pack()
-            lbl_t = tk.Label(inner, text=title, bg=self._C_BG, fg=color,
-                             font=("Segoe UI", 16, "bold"))
-            lbl_t.pack()
-            lbl_s = tk.Label(inner, text=sub, bg=self._C_BG, fg=self._C_DIM,
-                             font=self._F_SMALL, wraplength=195, justify="center")
-            lbl_s.pack(pady=(8, 0))
-            for widget in (outer, inner, lbl_t, lbl_s):
-                widget.bind("<Button-1>", lambda e: cmd())
-                widget.bind("<Enter>", lambda e, o=outer: o.config(bg=color))
-                widget.bind("<Leave>", lambda e, o=outer: o.config(bg=self._C_DIM))
-            return outer
+            return GlassCard(parent, title, sub, color, cmd, width=265, height=210, orb=False,
+                             title_font=("Segoe UI", 17, "bold"), sub_font=self._F_SMALL)
 
         positions = [cx - 280, cx, cx + 280]
         for pos, (title, layout_key, sub, color) in zip(positions, KB_OPTIONS):
@@ -1545,7 +1322,7 @@ class TextEntryExperiment(tk.Toplevel):
             c.create_window(pos, cy + 70, window=card, anchor="center")
 
         # Back button
-        back_btn = tk.Button(
+        back_btn = NeuButton(
             c, text="←  Back to Sequence Selection",
             command=lambda: self._show_sequence_mode_selection(method),
             bg=self._C_BG, fg=self._C_DIM,
@@ -1614,6 +1391,7 @@ class TextEntryExperiment(tk.Toplevel):
     # ─────────────────────────────────────────────────────────────────────────
     def _show_instructions(self, secs=5):
         if secs == 5:
+            self._bd.set_strength(1.0)
             self._use_canvas(); self._clear(); self.update_idletasks()
 
         c = self._canvas
@@ -1622,6 +1400,7 @@ class TextEntryExperiment(tk.Toplevel):
         acc   = self._C_ACC if self._method == "overt" else self._C_BLU
 
         if secs == 5:
+            self._bd.draw_glass(cx - 440, cy - 255, cx + 440, cy + 175, r=36)
             c.create_text(cx, cy - 210, text=instr[0],
                           fill=self._C_FG, font=self._F_HEAD, anchor="center")
             c.create_line(cx-250, cy-175, cx+250, cy-175, fill=self._C_DIM, width=1)
@@ -1640,6 +1419,7 @@ class TextEntryExperiment(tk.Toplevel):
     #  PHASE 2 — FIXATION CROSS  (5 s auto-advance, shown before each trial)
     # ─────────────────────────────────────────────────────────────────────────
     def _show_fixation(self, secs=5):
+        self._bd.set_strength(0.0)      # plain background for the fixation cross
         if secs == 5:
             self._use_canvas(); self._clear(); self.update_idletasks()
 
@@ -1673,6 +1453,7 @@ class TextEntryExperiment(tk.Toplevel):
     def _show_overt_memorize(self, secs=None):
         if secs is None:
             secs = self.MEMORIZE_SECS
+            self._bd.set_strength(0.0)      # plain background while memorizing
             self._use_canvas(); self._clear(); self.update_idletasks()
             self._mem_skipped = False            # reset for this trial
             self._create_memorize_skip_button()  # optional "Skip memorizing"
@@ -1725,7 +1506,7 @@ class TextEntryExperiment(tk.Toplevel):
     def _create_memorize_skip_button(self):
         c = self._canvas
         cx, cy = self._cx(), self._cy()
-        self._mem_skip_btn = tk.Button(
+        self._mem_skip_btn = NeuButton(
             c, text="  ⏭  Skip Memorizing  ",
             command=self._ask_skip_memorize,
             bg=self._C_BG, fg=self._C_FG,
@@ -1742,26 +1523,13 @@ class TextEntryExperiment(tk.Toplevel):
         self._mem_prompt_open = True
         c = self._canvas
         cx, cy = self._cx(), self._cy()
-        box = tk.Frame(c, bg=self._C_BG, highlightbackground=self._C_FG,
-                       highlightthickness=2, padx=40, pady=28)
-        tk.Label(box, text="Skip memorizing and go straight to typing?",
-                 bg=self._C_BG, fg=self._C_FG,
-                 font=("Segoe UI", 18, "bold")).pack(pady=(0, 6))
-        tk.Label(box, text="The countdown is on hold until you choose.",
-                 bg=self._C_BG, fg=self._C_DIM,
-                 font=self._F_SMALL).pack(pady=(0, 18))
-        row = tk.Frame(box, bg=self._C_BG); row.pack()
-        tk.Button(row, text="  Yes, skip  ", command=self._skip_memorize_yes,
-                  bg=self._C_GRN, fg="white", activebackground=T("#15803D"),
-                  activeforeground="white", relief="flat",
-                  font=("Segoe UI", 15, "bold"), padx=22, pady=10,
-                  cursor="hand2").pack(side="left", padx=12)
-        tk.Button(row, text="  No, keep memorizing  ", command=self._skip_memorize_no,
-                  bg=self._C_BG, fg=self._C_FG, activebackground=T("#EFEFEF"),
-                  relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
-                  padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
+        box = _GlassPrompt(
+            c, self._bd, cx, cy, "Skip memorizing and go straight to typing?",
+            "The countdown is on hold until you choose.",
+            [("Yes, skip", self._skip_memorize_yes, "accent"),
+             ("No, keep memorizing", self._skip_memorize_no, None)],
+            "mem_skip", self._C_FG, self._C_DIM)
         self._mem_skip_box = box
-        c.create_window(cx, cy, window=box, anchor="center", tags="mem_skip")
         c.tag_raise("mem_skip")
 
     def _close_memorize_prompt(self):
@@ -1860,16 +1628,16 @@ class TextEntryExperiment(tk.Toplevel):
         self._reset_trial_tracking()
 
         # Header
-        hdr = tk.Frame(frame, bg=self._C_BG, padx=24, pady=14,
-                       highlightbackground=self._C_DIM, highlightthickness=1)
-        hdr.pack(fill="x")
+        _hp = GlassPanel(frame, padx=24, pady=10)
+        _hp.pack(fill="x", padx=14, pady=(12, 2))
+        hdr, hbg = _hp.body, _hp.body_bg
         mode_tag = f" ({self._sequence_mode.upper()})" if self._sequence_mode else ""
         tk.Label(hdr, text=f"OVERT{mode_tag}  ·  Type from memory",
-                 bg=self._C_BG, fg=self._C_FG,
+                 bg=hbg, fg=self._C_FG,
                  font=("Segoe UI", 14, "bold")).pack(side="left")
         tk.Label(hdr,
                  text=f"Trial  {self._idx + 1} / {len(self._stimuli)}",
-                 bg=self._C_BG, fg=self._C_DIM,
+                 bg=hbg, fg=self._C_DIM,
                  font=self._F_SMALL).pack(side="right")
 
         # Input row
@@ -1878,7 +1646,7 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Label(inp_row, text="Type what you memorized:",
                  bg=self._C_BG, fg=self._C_DIM, font=self._F_SMALL).pack(anchor="w")
 
-        txt = tk.Text(inp_row, bg=self._C_BG, fg=self._C_FG,
+        txt = NeuText(inp_row, fg=self._C_FG,
                       insertbackground=self._C_FG,
                       font=("Segoe UI", 20), height=2, wrap="word",
                       relief="flat", padx=14, pady=12,
@@ -1940,8 +1708,8 @@ class TextEntryExperiment(tk.Toplevel):
             })
             self._advance()
 
-        tk.Button(inp_row, text="  ✔  Save & Next  ",
-                  command=_save,
+        NeuButton(inp_row, text="  ✔  Save & Next  ",
+                  command=_save, variant="accent",
                   bg=self._C_BG, fg=self._C_FG,
                   activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1,
@@ -1962,26 +1730,26 @@ class TextEntryExperiment(tk.Toplevel):
         self._reset_trial_tracking()
 
         # Header
-        hdr = tk.Frame(frame, bg=self._C_BG, padx=24, pady=14,
-                       highlightbackground=self._C_DIM, highlightthickness=1)
-        hdr.pack(fill="x")
+        _hp = GlassPanel(frame, padx=24, pady=10)
+        _hp.pack(fill="x", padx=14, pady=(12, 2))
+        hdr, hbg = _hp.body, _hp.body_bg
         mode_tag = f" ({self._sequence_mode.upper()})" if self._sequence_mode else ""
         tk.Label(hdr, text=f"COVERT{mode_tag}  ·  Type what you see",
-                 bg=self._C_BG, fg=self._C_FG,
+                 bg=hbg, fg=self._C_FG,
                  font=("Segoe UI", 14, "bold")).pack(side="left")
         tk.Label(hdr,
                  text=f"Trial  {self._idx + 1} / {len(self._stimuli)}",
-                 bg=self._C_BG, fg=self._C_DIM,
+                 bg=hbg, fg=self._C_DIM,
                  font=self._F_SMALL).pack(side="right")
 
         # Permanently visible stimulus
-        stim_row = tk.Frame(frame, bg=self._C_BG, pady=8,
-                            highlightbackground=self._C_DIM, highlightthickness=1)
-        stim_row.pack(fill="x")
+        _sp = GlassPanel(frame, padx=10, pady=8, accent=self._C_BLU)
+        _sp.pack(fill="x", padx=14, pady=4)
+        stim_row, sbg = _sp.body, _sp.body_bg
         tk.Label(stim_row, text="Read & type →",
-                 bg=self._C_BG, fg=self._C_DIM, font=self._F_SMALL).pack()
+                 bg=sbg, fg=self._C_DIM, font=self._F_SMALL).pack()
         tk.Label(stim_row, text=stim,
-                 bg=self._C_BG, fg=self._C_FG, font=self._F_STIM,
+                 bg=sbg, fg=self._C_FG, font=self._F_STIM,
                  wraplength=int(self.winfo_screenwidth() * 0.85),
                  justify="center").pack(pady=(2, 0))
 
@@ -1991,7 +1759,7 @@ class TextEntryExperiment(tk.Toplevel):
         tk.Label(inp_row, text="Your typed response:",
                  bg=self._C_BG, fg=self._C_DIM, font=self._F_SMALL).pack(anchor="w")
 
-        txt = tk.Text(inp_row, bg=self._C_BG, fg=self._C_FG,
+        txt = NeuText(inp_row, fg=self._C_FG,
                       insertbackground=self._C_FG,
                       font=("Segoe UI", 20), height=2, wrap="word",
                       relief="flat", padx=14, pady=8,
@@ -2052,8 +1820,8 @@ class TextEntryExperiment(tk.Toplevel):
             })
             self._advance()
 
-        tk.Button(inp_row, text="  ✔  Save & Next  ",
-                  command=_save,
+        NeuButton(inp_row, text="  ✔  Save & Next  ",
+                  command=_save, variant="accent",
                   bg=self._C_BG, fg=self._C_FG,
                   activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
                   relief="solid", bd=1,
@@ -2092,6 +1860,7 @@ class TextEntryExperiment(tk.Toplevel):
         """Display a rest/break screen between trials with a spoken countdown."""
         if secs is None:
             secs = self.REST_DURATION
+            self._bd.set_strength(1.0)
             self._use_canvas(); self._clear(); self.update_idletasks()
             # ── Pause the tracker by creating the flag file ────────────────────
             try:
@@ -2144,10 +1913,11 @@ class TextEntryExperiment(tk.Toplevel):
             bar_x = cx - bar_w // 2
             bar_y = cy + 170
             frac  = 1.0 - (secs / self.REST_DURATION)
-            c.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + 12,
-                                fill=T("#E5E7EB"), outline="", tags="rest_bar")
-            c.create_rectangle(bar_x, bar_y, bar_x + int(bar_w * frac), bar_y + 12,
-                               fill=self._C_ACC, outline="", tags="rest_bar")
+            c.create_line(bar_x, bar_y + 6, bar_x + bar_w, bar_y + 6, width=14, capstyle="round",
+                          fill=T("#E5E7EB"), tags="rest_bar")
+            if frac > 0.01:
+                c.create_line(bar_x, bar_y + 6, bar_x + max(1, int(bar_w * frac)), bar_y + 6, width=14,
+                              capstyle="round", fill=self._C_ACC, tags="rest_bar")
 
             # Audio beep only for the last 10 seconds of countdown
             if secs <= 10:
@@ -2187,7 +1957,7 @@ class TextEntryExperiment(tk.Toplevel):
         self._destroy_rest_widgets()
         c = self._canvas
         cx, cy = self._cx(), self._cy()
-        self._skip_btn = tk.Button(
+        self._skip_btn = NeuButton(
             c, text="  ⏭  Skip Rest  ",
             command=self._ask_skip_rest,
             bg=self._C_BG, fg=self._C_FG,
@@ -2204,27 +1974,13 @@ class TextEntryExperiment(tk.Toplevel):
         self._rest_prompt_open = True
         c = self._canvas
         cx, cy = self._cx(), self._cy()
-        box = tk.Frame(c, bg=self._C_BG, highlightbackground=self._C_FG,
-                       highlightthickness=2, padx=40, pady=28)
-        tk.Label(box, text="Do you want to skip the rest time?",
-                 bg=self._C_BG, fg=self._C_FG,
-                 font=("Segoe UI", 18, "bold")).pack(pady=(0, 6))
-        tk.Label(box, text="The countdown is on hold until you choose.",
-                 bg=self._C_BG, fg=self._C_DIM,
-                 font=self._F_SMALL).pack(pady=(0, 18))
-        row = tk.Frame(box, bg=self._C_BG); row.pack()
-        tk.Button(row, text="  Yes, skip  ", command=self._skip_rest_yes,
-                  bg=self._C_GRN, fg="white", activebackground=T("#15803D"),
-                  activeforeground="white", relief="flat",
-                  font=("Segoe UI", 15, "bold"), padx=22, pady=10,
-                  cursor="hand2").pack(side="left", padx=12)
-        tk.Button(row, text="  No, keep resting  ", command=self._skip_rest_no,
-                  bg=self._C_BG, fg=self._C_FG, activebackground=T("#EFEFEF"),
-                  relief="solid", bd=1, font=("Segoe UI", 15, "bold"),
-                  padx=22, pady=10, cursor="hand2").pack(side="left", padx=12)
+        box = _GlassPrompt(
+            c, self._bd, cx, cy, "Do you want to skip the rest time?",
+            "The countdown is on hold until you choose.",
+            [("Yes, skip", self._skip_rest_yes, "accent"),
+             ("No, keep resting", self._skip_rest_no, None)],
+            "rest_skip", self._C_FG, self._C_DIM)
         self._skip_box = box
-        self._skip_box_win = c.create_window(cx, cy, window=box,
-                                             anchor="center", tags="rest_skip")
         c.tag_raise("rest_skip")
 
     def _close_skip_prompt(self):
@@ -2393,6 +2149,7 @@ class TextEntryExperiment(tk.Toplevel):
             self._generate_experiment_heatmap(filepath)
 
         # ── Confirmation screen ──────────────────────────────────────────────
+        self._bd.set_strength(1.0)
         self._use_canvas(); self._clear(); self.update_idletasks()
         c  = self._canvas
         cx, cy = self._cx(), self._cy()
@@ -2422,22 +2179,12 @@ class TextEntryExperiment(tk.Toplevel):
                           width=int(self._cw() * 0.7))
 
         # Buttons
-        btns = tk.Frame(c, bg=self._C_BG)
-        tk.Button(btns, text="  ↺  Restart  ",
-                  command=self._show_name_entry,
-                  bg=self._C_BG, fg=self._C_FG,
-                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
-                  relief="solid", bd=1,
-                  font=("Segoe UI", 13, "bold"),
-                  padx=16, pady=8, cursor="hand2").pack(side="left", padx=6)
-        tk.Button(btns, text="  ✕  Close  ",
-                  command=self.destroy,
-                  bg=self._C_BG, fg=self._C_FG,
-                  activebackground=T("#EFEFEF"), activeforeground=self._C_FG,
-                  relief="solid", bd=1, font=("Segoe UI", 13),
-                  padx=16, pady=8, cursor="hand2").pack(side="left", padx=6)
-
-        c.create_window(cx, cy + 90, window=btns, anchor="center")
+        b1 = NeuButton(c, text="  ↺  Restart  ", command=self._show_name_entry,
+                       font=("Segoe UI", 13, "bold"), padx=16, pady=8)
+        b2 = NeuButton(c, text="  ✕  Close  ", command=self.destroy,
+                       font=("Segoe UI", 13, "bold"), padx=16, pady=8)
+        c.create_window(cx - 20, cy + 100, window=b1, anchor="e")
+        c.create_window(cx + 20, cy + 100, window=b2, anchor="w")
 
 
 

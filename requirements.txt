@@ -7,3 +7,4 @@ matplotlib
 scipy
 tkwebview2
 pyautogui
+pillow

@@ -2,6 +2,9 @@
 import cv2
 import numpy as np
 import time
+from PIL import Image, ImageDraw
+import neo_cv as _cv
+from neo_ui import BG, TEXT, MUTED, ACCENT, DANGER, PURPLE, AMBER, IS_DARK, mix, lighten   # soft glass look
 
 try:
     import pyautogui
@@ -16,7 +19,7 @@ class VirtualKeyboard:
     KEY_H = 70
     KEY_GAP = 14
     MARGIN = 16
-    TEXT_H = 60
+    TEXT_H = 72
 
     LAYOUTS = {
         "normal": {
@@ -36,7 +39,12 @@ class VirtualKeyboard:
         }
     }
 
-    CONTROL_KEYS = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
+    # "Delete" (wipe everything) is NOT in this row any more: it sits alone in the top-right
+    # corner (CLEAR_KEY) and needs a second, separate dwell to confirm.
+    CONTROL_KEYS = ["|◄", "◄", "⌫", "Space", "►", "►|"]
+    CLEAR_KEY = "Delete"
+    CLEAR_CONFIRM = True          # False = old one-dwell behaviour
+    CLEAR_CONFIRM_SECS = 3.0
     NUMPAD_KEYS = [
         ["1", "2", "3"],
         ["4", "5", "6"],
@@ -54,6 +62,11 @@ class VirtualKeyboard:
         self.last_press_t   = 0.0
         self._textpad       = None   # set via link_textpad()
         self.current_layout = "normal"
+        self._armed_t       = 0.0     # time "Clear all" was armed (0 = not armed)
+        self._clear_lock    = False   # after arming, gaze must leave the key before it can confirm
+        self._surf          = None
+        self._patches       = {}
+        self._base_bgr      = None
         self.set_layout("normal")
 
     def set_layout(self, layout_name):
@@ -111,7 +124,7 @@ class VirtualKeyboard:
         # ── 4. Row 4: 7 Control Keys (Horizontal Row across full left width)
         y1 = top_y + 3 * (kh + gap)
         y2 = y1 + kh
-        ctrl_weights = [1.0, 1.0, 1.2, 2.2, 1.6, 1.0, 1.0]
+        ctrl_weights = [1.0, 1.0, 1.5, 4.2, 1.0, 1.0]
         sum_w = sum(ctrl_weights)
         avail_w_ctrl = w_left - (len(self.CONTROL_KEYS) - 1) * gap
         cur_x = left_x1
@@ -134,9 +147,16 @@ class VirtualKeyboard:
                 nx2 = nx1 + np_kw
                 self.key_list.append((num_char, int(nx1), int(ny1), int(nx2), int(ny2)))
 
+        # ── 6. CLEAR ALL: alone in the top-right corner, away from every typing key ──
+        np_right = numpad_x_start + 3 * np_kw + 2 * gap
+        self.key_list.append((self.CLEAR_KEY, int(numpad_x_start), 12, int(np_right), self.TEXT_H - 12))
+        self._text_bar = (m, 12, int(left_x_end), self.TEXT_H - 12)
+        self._numpad_panel = (int(numpad_x_start - 14), int(top_y - 10), int(np_right + 14), int(top_y + 4 * kh + 3 * gap + 10))
+        self._surf = None            # rebuild cached art for the new layout
+
         # Calculate Canvas Dimensions
         max_x = max(x2 for _, _, _, x2, _ in self.key_list) + m
-        max_y = max(y2 for _, _, _, _, y2 in self.key_list) + m + 24
+        max_y = max(y2 for _, _, _, _, y2 in self.key_list) + m + 34
         self._canvas_w = int(max_x)
         self._canvas_h = int(max_y)
 
@@ -167,10 +187,15 @@ class VirtualKeyboard:
         hit = next((lbl for lbl, x1, y1, x2, y2 in self.key_list
                     if x1 <= kx < x2 and y1 <= ky < y2), None)
 
+        if hit != self.CLEAR_KEY:
+            self._clear_lock = False    # gaze left the Clear key -> it may be confirmed again
         if hit != self.hovered_key:
             self.hovered_key    = hit
             self.dwell_start    = time.time() if hit else None
             self.dwell_progress = 0.0
+            return None
+        if hit == self.CLEAR_KEY and self._clear_lock:
+            self.dwell_progress = 0.0   # armed: look away and back to confirm
             return None
         if hit and self.dwell_start:
             self.dwell_progress = min(1.0, (time.time() - self.dwell_start) / self.DWELL_TIME)
@@ -193,7 +218,24 @@ class VirtualKeyboard:
             return hit
         return None
 
+    def _request_clear(self):
+        """Two-step clear: first activation arms the key, a second one (after the gaze left and
+        came back, or a deliberate second blink) within CLEAR_CONFIRM_SECS wipes the text."""
+        now = time.time()
+        if not self.CLEAR_CONFIRM:
+            self.typed_text = ""
+            return
+        if self._armed_t and now - self._armed_t <= self.CLEAR_CONFIRM_SECS:
+            self.typed_text = ""
+            self._armed_t = 0.0
+            self._clear_lock = False
+        else:
+            self._armed_t = now
+            self._clear_lock = True     # staring at the key must not confirm by itself
+
     def _press(self, label):
+        if label != self.CLEAR_KEY:
+            self._armed_t = 0.0         # any other key cancels a pending clear
         self.last_pressed = label
         if label in ("Save & next", "ENTER"):
             text = self.typed_text.strip()
@@ -209,7 +251,7 @@ class VirtualKeyboard:
         elif label in ("SPACE", "Space"):
             self.typed_text += " "
         elif label in ("DELETE", "Delete"):
-            self.typed_text = ""
+            self._request_clear()
         elif label == "|◄":
             if MOUSE_AVAILABLE: pyautogui.press('home')
         elif label == "◄":
@@ -222,68 +264,100 @@ class VirtualKeyboard:
             self.typed_text += label
 
     # ── render ────────────────────────────────────────────────────────────────
+    def _face_fg(self, label):
+        base = BG
+        lift = lighten(base, 0.04) if IS_DARK else base
+        if label == self.CLEAR_KEY:
+            if self._armed_t:
+                return DANGER, ("#1A1510" if IS_DARK else "#FFFFFF"), DANGER
+            return mix(lift, DANGER, 0.22), DANGER, DANGER
+        if label in self.CONTROL_KEYS:
+            return mix(lift, ACCENT, 0.14), (AMBER if label == "⌫" else TEXT), None
+        if label in ("1","2","3","4","5","6","7","8","9","0",".","?"):
+            return mix(lift, PURPLE, 0.12), TEXT, None
+        return lift, TEXT, None
+
+    def _build_art(self):
+        """Render backdrop, glass numpad panel, text well and all keys once (Pillow)."""
+        S = _cv.Surface(self._canvas_w, self._canvas_h, depth=4)
+        S.glass(self._numpad_panel, r=28, accent=PURPLE, accent_a=0.07)
+        S.inset(self._text_bar, r=16)
+        S.freeze_bare()
+        for label, x1, y1, x2, y2 in self.key_list:
+            face, fg, glow = self._face_fg(label)
+            if label == self.CLEAR_KEY:
+                label_txt, size = "✕  Clear all", 17
+            else:
+                label_txt, size = label, None
+            S.key((x1, y1, x2, y2), label_txt, face, fg, "rest", glow, size, paste=True)
+        _cv.draw_text_center(S.img, (self.MARGIN, self._canvas_h - 30, self._canvas_w - self.MARGIN, self._canvas_h - 8),
+                             f"Layout: {self.current_layout.upper()}   ·   Gaze-dwell / LEFT blink   ·   Rest in top-left space",
+                             13, MUTED, bold=False)
+        self._surf = S
+        self._patches = {}
+        self._base_bgr = _cv.to_bgr(S.img)
+
+    def _patch(self, label, state, armed):
+        key = (label, state, armed)
+        p = self._patches.get(key)
+        if p is None:
+            rect = next((x1, y1, x2, y2) for l, x1, y1, x2, y2 in self.key_list if l == label)
+            face, fg, glow = self._face_fg(label)
+            if label == self.CLEAR_KEY:
+                txt, size = ("Look away, then dwell again" if armed else "✕  Clear all"), (14 if armed else 17)
+            else:
+                txt, size = label, None
+            x, y, im = self._surf.key(rect, txt, face, fg, state, glow, size)
+            p = (x, y, _cv.to_bgr(im))
+            self._patches[key] = p
+        return p
+
+    @staticmethod
+    def _paste(img, patch):
+        x, y, pm = patch
+        h, w = pm.shape[:2]
+        x1, y1 = max(0, x), max(0, y)
+        x2, y2 = min(img.shape[1], x + w), min(img.shape[0], y + h)
+        if x2 > x1 and y2 > y1:
+            img[y1:y2, x1:x2] = pm[y1 - y:y2 - y, x1 - x:x2 - x]
+
     def render(self):
         if not self.visible:
             return
-        img = np.full((self._canvas_h, self._canvas_w, 3), (20, 20, 30), dtype=np.uint8)
-
-        # Typed-text bar
-        cv2.rectangle(img, (self.MARGIN, 6), (self._canvas_w - self.MARGIN, self.TEXT_H - 6), (40, 40, 60), -1)
-        cv2.rectangle(img, (self.MARGIN, 6), (self._canvas_w - self.MARGIN, self.TEXT_H - 6), (80, 80, 120), 1)
-        disp = self.typed_text[-48:] if self.typed_text else "▮  start typing…"
-        col  = (220, 220, 255) if self.typed_text else (80, 80, 100)
-        cv2.putText(img, disp, (self.MARGIN + 8, self.TEXT_H - 16),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 1, cv2.LINE_AA)
-
+        if self._surf is None:
+            self._build_art()
+        # expire an un-confirmed "Clear all"
+        if self._armed_t and time.time() - self._armed_t > self.CLEAR_CONFIRM_SECS:
+            self._armed_t = 0.0
+            self._clear_lock = False
+        img = self._base_bgr.copy()
+        armed = bool(self._armed_t)
         now = time.time()
+
+        # keys whose look differs from the baked "rest" image
         for label, x1, y1, x2, y2 in self.key_list:
             hov = label == self.hovered_key
-            
-            elapsed = now - self.last_press_t
-            progress = max(0.0, min(1.0, 1.0 - (elapsed / 0.3))) if label == self.last_pressed else 0.0
-            prs = progress > 0.0
-            
-            spec = label in self.CONTROL_KEYS or label == "Save & next"
-            is_num = label in ("1","2","3","4","5","6","7","8","9","0",".","?")
-
-            if prs:
-                normal_bg = (40, 70, 40) if label == "Save & next" else (40, 40, 70) if spec else (35, 35, 55)
-                press_bg  = (0, 240, 120)
-                bg = tuple(int(normal_bg[i] + (press_bg[i] - normal_bg[i]) * progress) for i in range(3))
-                inset = int(3 * progress)
-                rx1, ry1, rx2, ry2 = x1 + inset, y1 + inset, x2 - inset, y2 - inset
-                text_col  = (10, 10, 10)
-            else:
-                if label == "Save & next":
-                    bg = (50, 130, 70) if hov else (35, 95, 50)
-                elif spec:
-                    bg = (70, 90, 150) if hov else (45, 45, 75)
-                elif is_num:
-                    bg = (80, 70, 120) if hov else (45, 40, 65)
-                else:
-                    bg = (60, 80, 140) if hov else (35, 35, 55)
-                rx1, ry1, rx2, ry2 = x1 + 2, y1 + 2, x2 - 2, y2 - 2
-                text_col  = (230, 240, 255)
-
-            cv2.rectangle(img, (rx1, ry1), (rx2, ry2), bg, -1)
-            
+            flash = label == self.last_pressed and (now - self.last_press_t) < 0.3
+            if flash:
+                self._paste(img, self._patch(label, "flash", armed))
+            elif hov:
+                self._paste(img, self._patch(label, "hover", armed))
+            elif label == self.CLEAR_KEY and armed:
+                self._paste(img, self._patch(label, "rest", armed))
             if hov and self.dwell_progress > 0:
                 cx2, cy2 = (x1 + x2) // 2, (y1 + y2) // 2
                 r = min(x2 - x1, y2 - y1) // 2 - 4
-                cv2.ellipse(img, (cx2, cy2), (r, r), -90, 0, int(360 * self.dwell_progress), (0, 220, 255), 3)
-                
-            border_col = (0, 255, 100) if prs else (0, 220, 255) if hov else (60, 60, 90)
-            cv2.rectangle(img, (rx1, ry1), (rx2, ry2), border_col, 1)
-            
-            fs  = 0.52 if len(label) > 6 else 0.68 if len(label) > 1 else 0.95
-            thick = 2 if len(label) == 1 else 1
-            tsz = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, thick)[0]
-            tx  = rx1 + (rx2 - rx1 - tsz[0]) // 2
-            ty  = ry1 + (ry2 - ry1 + tsz[1]) // 2
-            cv2.putText(img, label, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, fs, text_col, thick, cv2.LINE_AA)
+                cv2.ellipse(img, (cx2, cy2), (r, r), -90, 0, int(360 * self.dwell_progress),
+                            _cv.to_bgr_tuple(ACCENT), 3, cv2.LINE_AA)
 
-        cv2.putText(img, f"Layout: {self.current_layout.upper()}  |  Gaze-dwell / LEFT blink  |  Rest in top-left space",
-                    (self.MARGIN, self._canvas_h - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (100, 130, 160), 1, cv2.LINE_AA)
+        # typed text inside the inset well
+        tx1, ty1, tx2, ty2 = self._text_bar
+        disp = self.typed_text[-52:] if self.typed_text else "start typing…"
+        pil = Image.fromarray(img[ty1:ty2, tx1:tx2, ::-1])
+        d = ImageDraw.Draw(pil)
+        f = _cv.font(22, bold=bool(self.typed_text))
+        l, t, r, b = d.textbbox((0, 0), disp, font=f)
+        d.text((16 - l, (ty2 - ty1 - (b - t)) / 2 - t), disp, font=f,
+               fill=_cv.rgb(TEXT if self.typed_text else MUTED))
+        img[ty1:ty2, tx1:tx2] = np.asarray(pil)[:, :, ::-1]
         cv2.imshow("Virtual Keyboard", img)
-

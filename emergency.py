@@ -8,6 +8,7 @@ import urllib.request
 import urllib.parse
 import tkinter as tk
 from theme import T          # warm eye-comfort colours (see theme.py)
+from neo_ui import NeuButton, NeuEntry, GlassPanel, OnScreenKeyboard   # neumorphic + glass kit
 from tkinter import messagebox, font as tkfont, simpledialog
 
 try:
@@ -233,15 +234,15 @@ class AlertSettingsDialog(tk.Toplevel):
 
         tk.Label(tw_frame, text="Account SID:", bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=0, column=0, sticky="e")
         self.tw_sid_var = tk.StringVar(value=config_data.get("twilio_account_sid", ""))
-        tk.Entry(tw_frame, textvariable=self.tw_sid_var, width=45, bg=BG_COLOR).grid(row=0, column=1, padx=6, pady=3)
+        NeuEntry(tw_frame, textvariable=self.tw_sid_var, width=45, bg=BG_COLOR).grid(row=0, column=1, padx=6, pady=3)
 
         tk.Label(tw_frame, text="Auth Token:", bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=1, column=0, sticky="e")
         self.tw_auth_var = tk.StringVar(value=config_data.get("twilio_auth_token", ""))
-        tk.Entry(tw_frame, textvariable=self.tw_auth_var, width=45, show="*", bg=BG_COLOR).grid(row=1, column=1, padx=6, pady=3)
+        NeuEntry(tw_frame, textvariable=self.tw_auth_var, width=45, show="*", bg=BG_COLOR).grid(row=1, column=1, padx=6, pady=3)
 
         tk.Label(tw_frame, text="From Number:", bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=2, column=0, sticky="e")
         self.tw_from_var = tk.StringVar(value=config_data.get("twilio_from_number", ""))
-        tk.Entry(tw_frame, textvariable=self.tw_from_var, width=45, bg=BG_COLOR).grid(row=2, column=1, padx=6, pady=3)
+        NeuEntry(tw_frame, textvariable=self.tw_from_var, width=45, bg=BG_COLOR).grid(row=2, column=1, padx=6, pady=3)
 
         # Webhook Fields
         wh_frame = tk.LabelFrame(self, text="Webhook Setup", font=("Segoe UI", 11, "bold"),
@@ -250,17 +251,17 @@ class AlertSettingsDialog(tk.Toplevel):
 
         tk.Label(wh_frame, text="Webhook URL:", bg=SURFACE_COLOR, fg=TEXT_MUTED).grid(row=0, column=0, sticky="e")
         self.wh_url_var = tk.StringVar(value=config_data.get("webhook_url", ""))
-        tk.Entry(wh_frame, textvariable=self.wh_url_var, width=45, bg=BG_COLOR).grid(row=0, column=1, padx=6, pady=3)
+        NeuEntry(wh_frame, textvariable=self.wh_url_var, width=45, bg=BG_COLOR).grid(row=0, column=1, padx=6, pady=3)
 
         # Save Button
         btn_f = tk.Frame(self, bg=SURFACE_COLOR)
         btn_f.pack(pady=15)
 
-        tk.Button(btn_f, text="Save Settings", font=("Segoe UI", 13, "bold"),
+        NeuButton(btn_f, text="Save Settings", font=("Segoe UI", 13, "bold"),
                   bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
                   relief="flat", padx=24, pady=8, cursor="hand2", command=self._save).pack(side="left", padx=10)
         
-        tk.Button(btn_f, text="Cancel", font=("Segoe UI", 13),
+        NeuButton(btn_f, text="Cancel", font=("Segoe UI", 13),
                   bg=BORDER_COLOR, fg=TEXT_MAIN, relief="flat", padx=20, pady=8,
                   cursor="hand2", command=self.destroy).pack(side="left", padx=10)
 
@@ -293,7 +294,7 @@ class CustomPhraseDialog(tk.Toplevel):
 
         # Text Field Display
         self.entry_var = tk.StringVar()
-        self.entry = tk.Entry(self, textvariable=self.entry_var, font=("Segoe UI", 20, "bold"),
+        self.entry = NeuEntry(self, textvariable=self.entry_var, font=("Segoe UI", 20, "bold"),
                               bg=BG_COLOR, fg=TEXT_MAIN, insertbackground=TEXT_MAIN,
                               bd=2, relief="groove", justify="left")
         self.entry.pack(padx=30, pady=8, fill="x", ipady=8)
@@ -315,103 +316,19 @@ class CustomPhraseDialog(tk.Toplevel):
         kb_frame = tk.Frame(self, bg=SURFACE_COLOR, padx=12, pady=8)
         kb_frame.pack(fill="both", expand=True)
 
-        def make_btn(parent, text, bg_color=T("#F1F5F9"), fg_color=TEXT_MAIN, font_size=13, command=None):
-            btn = tk.Button(
-                parent, text=text, font=("Segoe UI", font_size, "bold"),
-                bg=bg_color, fg=fg_color, activebackground=T("#CBD5E1"),
-                activeforeground=TEXT_MAIN, relief="solid", bd=1,
-                cursor="hand2", command=command or (lambda k=text: self._handle_key(k))
-            )
-            return btn
-
-        # ── 4-Row Keyboard Structure + Right Numpad ───────────────────────
-        content = tk.Frame(kb_frame, bg=SURFACE_COLOR)
-        content.pack(fill="both", expand=True)
-        content.columnconfigure(0, weight=8)
-        content.columnconfigure(1, weight=2)
-        content.rowconfigure(0, weight=1)
-
-        # Left area (4 rows)
-        left = tk.Frame(content, bg=SURFACE_COLOR)
-        left.grid(row=0, column=0, sticky="nsew")
-        for i in range(4):
-            left.rowconfigure(i, weight=1)
-        left.columnconfigure(0, weight=1)
-
-        # ── Row 1: 10 keys (Q-P) ──────────────────────────────────────────
-        row1 = tk.Frame(left, bg=SURFACE_COLOR)
-        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
-        row1.rowconfigure(0, weight=1)
-        for c, key in enumerate(["Q","W","E","R","T","Y","U","I","O","P"]):
-            row1.columnconfigure(c, weight=1)
-            btn = make_btn(row1, key, font_size=15)
-            btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
-
-        # ── Row 2: 9 keys (A-L) ───────────────────────────────────────────
-        row2 = tk.Frame(left, bg=SURFACE_COLOR)
-        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 4))
-        row2.rowconfigure(0, weight=1)
-        for c, key in enumerate(["A","S","D","F","G","H","J","K","L"]):
-            row2.columnconfigure(c, weight=1)
-            btn = make_btn(row2, key, font_size=15)
-            btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
-
-        # ── Row 3: 7 Letter keys in a horizontal row (Z-M) ────────────────
-        row3 = tk.Frame(left, bg=SURFACE_COLOR)
-        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
-        row3.rowconfigure(0, weight=1)
-
-        for c, key in enumerate(["Z","X","C","V","B","N","M"]):
-            row3.columnconfigure(c, weight=1)
-            btn = make_btn(row3, key, font_size=16)
-            btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
-
-        # ── Row 4: 7 Control keys in a horizontal row ─────────────────────
-        row4 = tk.Frame(left, bg=SURFACE_COLOR)
-        row4.grid(row=3, column=0, sticky="nsew")
-        row4.rowconfigure(0, weight=1)
-
-        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
-        for c, ckey in enumerate(ctrl_keys):
-            row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color=T("#64748B"), fg_color=T("#FFFFFF"), font_size=13)
-            btn.grid(row=0, column=c, sticky="nsew", padx=3, pady=2)
-
-        # ── Right Section: 3x4 Numpad Grid ────────────────────────────────
-        np_outer = tk.Frame(content, bg=SURFACE_COLOR, highlightbackground=T("#CBD5E1"),
-                            highlightthickness=1, padx=6, pady=4)
-        np_outer.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        np_outer.rowconfigure(1, weight=1)
-        np_outer.columnconfigure(0, weight=1)
-
-        tk.Label(np_outer, text="NUMBERS", bg=SURFACE_COLOR, fg=TEXT_MAIN,
-                 font=("Segoe UI", 8, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
-
-        num_grid = [
-            ["1", "2", "3"],
-            ["4", "5", "6"],
-            ["7", "8", "9"],
-            [".", "0", "?"]
-        ]
-        np_frame = tk.Frame(np_outer, bg=SURFACE_COLOR)
-        np_frame.grid(row=1, column=0, sticky="nsew")
-        for r_idx, row in enumerate(num_grid):
-            np_frame.rowconfigure(r_idx, weight=1)
-            for c_idx, key in enumerate(row):
-                np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color=T("#3B82F6"), fg_color=T("#FFFFFF"), font_size=14)
-                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=2, pady=2)
+        # shared gaze keyboard: "Clear all" sits alone in the corner and needs a 2nd tap
+        OnScreenKeyboard(kb_frame, on_key=self._handle_key).pack(fill="both", expand=True)
 
         # ── Dialog Action Buttons (Add / Cancel) ─────────────────────────────
         btn_frame = tk.Frame(self, bg=SURFACE_COLOR, pady=8)
         btn_frame.pack(fill="x", side="bottom")
 
-        tk.Button(btn_frame, text="Add Phrase", font=("Segoe UI", 14, "bold"),
+        NeuButton(btn_frame, text="Add Phrase", font=("Segoe UI", 14, "bold"),
                   bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
                   activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=6,
                   cursor="hand2", command=self._on_add).pack(side="left", padx=(30, 10))
 
-        tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 14),
+        NeuButton(btn_frame, text="Cancel", font=("Segoe UI", 14),
                   bg=BORDER_COLOR, fg=TEXT_MAIN, activebackground=T("#CBD5E1"),
                   activeforeground=TEXT_MAIN, relief="flat", padx=24, pady=6,
                   cursor="hand2", command=self.destroy).pack(side="right", padx=(10, 30))
@@ -466,36 +383,37 @@ class EmergencyWindow(tk.Toplevel):
 
     def _build_ui(self):
         # ── Top Display Header ───────────────────────────────────────────────
-        header = tk.Frame(self, bg=SURFACE_COLOR, padx=24, pady=16, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        header.pack(fill="x")
+        _hp = GlassPanel(self, padx=24, pady=12)
+        _hp.pack(fill="x", padx=18, pady=(16, 4))
+        header, hbg = _hp.body, _hp.body_bg
 
         # Title & Emergency Contact info
-        left_hdr = tk.Frame(header, bg=SURFACE_COLOR)
+        left_hdr = tk.Frame(header, bg=hbg)
         left_hdr.pack(side="left")
 
         tk.Label(left_hdr, text="🚨 Emergency Communication", font=("Segoe UI", 20, "bold"),
-                 bg=SURFACE_COLOR, fg=RED_BTN).pack(anchor="w")
+                 bg=hbg, fg=RED_BTN).pack(anchor="w")
 
         chan = self.config_data.get("dispatch_channel", "simulation").upper()
         self.contact_var = tk.StringVar(value=f"Emergency Contact: {self.config_data.get('emergency_contact', '')}  [{chan} MODE]")
         self.contact_lbl = tk.Label(left_hdr, textvariable=self.contact_var, font=("Segoe UI", 12),
-                                    bg=SURFACE_COLOR, fg=TEXT_MUTED)
+                                    bg=hbg, fg=TEXT_MUTED)
         self.contact_lbl.pack(anchor="w")
 
-        right_hdr = tk.Frame(header, bg=SURFACE_COLOR)
+        right_hdr = tk.Frame(header, bg=hbg)
         right_hdr.pack(side="right")
 
-        tk.Button(right_hdr, text="⚙ Alert Setup", font=("Segoe UI", 12, "bold"),
-                  bg=SURFACE_COLOR, fg=TEXT_MAIN, activebackground=BORDER_COLOR,
+        NeuButton(right_hdr, text="⚙ Alert Setup", font=("Segoe UI", 12, "bold"),
+                  bg=hbg, fg=TEXT_MAIN, activebackground=BORDER_COLOR,
                   activeforeground=TEXT_MAIN, relief="solid", bd=1, padx=14, pady=8,
                   cursor="hand2", command=self._open_alert_settings).pack(side="left", padx=6)
 
-        tk.Button(right_hdr, text="✏ Edit Contact", font=("Segoe UI", 12, "bold"),
-                  bg=SURFACE_COLOR, fg=TEXT_MAIN, activebackground=BORDER_COLOR,
+        NeuButton(right_hdr, text="✏ Edit Contact", font=("Segoe UI", 12, "bold"),
+                  bg=hbg, fg=TEXT_MAIN, activebackground=BORDER_COLOR,
                   activeforeground=TEXT_MAIN, relief="solid", bd=1, padx=14, pady=8,
                   cursor="hand2", command=self._edit_contact).pack(side="left", padx=6)
 
-        tk.Button(right_hdr, text="🚨 SEND ALERT NOW", font=("Segoe UI", 13, "bold"),
+        NeuButton(right_hdr, text="🚨 SEND ALERT NOW", font=("Segoe UI", 13, "bold"),
                   bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
                   activeforeground=T("#FFFFFF"), relief="flat", padx=18, pady=8,
                   cursor="hand2", command=self._send_emergency_alert).pack(side="left", padx=6)
@@ -505,13 +423,13 @@ class EmergencyWindow(tk.Toplevel):
         disp_frame.pack(fill="x")
 
         self.display_var = tk.StringVar()
-        self.display_entry = tk.Entry(disp_frame, textvariable=self.display_var,
+        self.display_entry = NeuEntry(disp_frame, textvariable=self.display_var,
                                       font=("Segoe UI", 22, "bold"), bg=SURFACE_COLOR,
                                       fg=TEXT_MAIN, insertbackground=TEXT_MAIN,
                                       bd=2, relief="groove")
         self.display_entry.pack(side="left", fill="x", expand=True, ipady=10, padx=(0, 10))
 
-        tk.Button(disp_frame, text="Clear ✕", font=("Segoe UI", 14, "bold"),
+        NeuButton(disp_frame, text="Clear ✕", font=("Segoe UI", 14, "bold"),
                   bg=SURFACE_COLOR, fg=TEXT_MUTED, activebackground=BORDER_COLOR,
                   activeforeground=TEXT_MAIN, relief="solid", bd=1, padx=18, pady=10,
                   cursor="hand2", command=lambda: self.display_var.set("")).pack(side="right")
@@ -527,36 +445,37 @@ class EmergencyWindow(tk.Toplevel):
         self.grid_container.pack(fill="both", expand=True)
 
         # ── Bottom Control Toolbar ───────────────────────────────────────────
-        toolbar = tk.Frame(self, bg=SURFACE_COLOR, padx=24, pady=14, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        toolbar.pack(fill="x", side="bottom")
+        _tp = GlassPanel(self, padx=24, pady=10)
+        _tp.pack(fill="x", side="bottom", padx=18, pady=(4, 16))
+        toolbar = _tp.body
 
         # Back Button
-        tk.Button(toolbar, text="◀ Back", font=("Segoe UI", 15, "bold"),
+        NeuButton(toolbar, text="◀ Back", font=("Segoe UI", 15, "bold"),
                   bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
                   activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self.destroy).pack(side="left", padx=6)
 
         # Add Phrase Button
-        tk.Button(toolbar, text="+ Add phrase", font=("Segoe UI", 15, "bold"),
+        NeuButton(toolbar, text="+ Add phrase", font=("Segoe UI", 15, "bold"),
                   bg=GREEN_TILE, fg=T("#FFFFFF"), activebackground=GREEN_TILE_HOV,
                   activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._add_phrase_dialog).pack(side="left", padx=6)
 
         # Remove Phrase Button
-        self.remove_btn = tk.Button(toolbar, text="- Remove phrase", font=("Segoe UI", 15, "bold"),
+        self.remove_btn = NeuButton(toolbar, text="- Remove phrase", font=("Segoe UI", 15, "bold"),
                                     bg=RED_BTN, fg=T("#FFFFFF"), activebackground=RED_BTN_HOV,
                                     activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                                     cursor="hand2", command=self._toggle_remove_mode)
         self.remove_btn.pack(side="left", padx=6)
 
         # Speak TTS Button
-        tk.Button(toolbar, text="🔊 Speak", font=("Segoe UI", 15, "bold"),
+        NeuButton(toolbar, text="🔊 Speak", font=("Segoe UI", 15, "bold"),
                   bg=BLUE_BTN, fg=T("#FFFFFF"), activebackground=T("#1D4ED8"),
                   activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._speak_current_phrase).pack(side="right", padx=6)
 
         # Send Message Button
-        tk.Button(toolbar, text="📱 Send Alert", font=("Segoe UI", 15, "bold"),
+        NeuButton(toolbar, text="📱 Send Alert", font=("Segoe UI", 15, "bold"),
                   bg=ORANGE_TILE, fg=T("#FFFFFF"), activebackground=ORANGE_TILE_HOV,
                   activeforeground=T("#FFFFFF"), relief="flat", padx=24, pady=10,
                   cursor="hand2", command=self._send_emergency_alert).pack(side="right", padx=6)
@@ -587,7 +506,7 @@ class EmergencyWindow(tk.Toplevel):
                 bg = T("#DC2626")
                 hov = T("#B91C1C")
 
-            btn = tk.Button(
+            btn = NeuButton(
                 self.grid_container, text=text, font=("Segoe UI", 15, "bold"),
                 bg=bg, fg=T("#FFFFFF"), activebackground=hov, activeforeground=T("#FFFFFF"),
                 relief="flat", wraplength=260, justify="center", cursor="hand2",

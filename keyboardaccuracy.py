@@ -1,5 +1,6 @@
 import tkinter as tk
 from theme import T, TXT_LIGHT   # eye-comfort colours (see theme.py)
+from neo_ui import NeoKeyboard   # neumorphic keyboard (see neo_ui.py)
 from tkinter import font as tkfont, filedialog
 import subprocess, sys, os, datetime, random, json
 
@@ -444,23 +445,8 @@ class NotepadWindow(tk.Toplevel):
 #  BUILT-IN ON-SCREEN KEYBOARD  (fallback when virtual_keyboard.py not found)
 # ─────────────────────────────────────────────────────────────────────────────
 class OnScreenKeyboard(tk.Toplevel):
-    LAYOUTS = {
-        "normal": {
-            "row1": ["Q","W","E","R","T","Y","U","I","O","P"],
-            "row2": ["A","S","D","F","G","H","J","K","L"],
-            "row3": ["Z","X","C","V","B","N","M"],
-        },
-        "alpha": {
-            "row1": ["A","B","C","D","E","F","G","H","I","J"],
-            "row2": ["K","L","M","N","O","P","Q","R","S"],
-            "row3": ["T","U","V","W","X","Y","Z"],
-        },
-        "cluster": {
-            "row1": ["E","T","A","O","I","F","G","Y","P","B"],
-            "row2": ["N","S","H","R","D","V","K","J","X"],
-            "row3": ["L","C","U","M","W","Q","Z"],
-        }
-    }
+    """Floating window around the shared neumorphic keyboard (neo_ui.NeoKeyboard).
+    'Delete' is now an isolated, two-tap 'Clear all' key in the top-right corner."""
 
     def __init__(self, master, target: tk.Text, layout="normal"):
         super().__init__(master)
@@ -468,154 +454,19 @@ class OnScreenKeyboard(tk.Toplevel):
         self.configure(bg=BG)
         self.resizable(False, False)
         self.attributes("-topmost", True)
-        self._target = target
-        self._layout = layout if layout in self.LAYOUTS else "normal"
-        self._build()
+        self.geometry("1180x500")
+        self._kb = NeoKeyboard(self, target, layout=layout)
+        self._kb.pack(fill="both", expand=True)
         self._center()
 
     def set_layout(self, layout):
-        self._layout = layout if layout in self.LAYOUTS else "normal"
-        for widget in self.winfo_children():
-            widget.destroy()
-        self._build()
-
-    def _build(self):
-        main_frame = tk.Frame(self, bg=BG, padx=8, pady=8)
-        main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
-
-        def make_btn(parent, text, bg_color=SURFACE, fg_color=TEXT, font_size=18):
-            btn = tk.Button(
-                parent, text=text, font=("Segoe UI", font_size, "bold"),
-                bg=bg_color, fg=fg_color, activebackground=ACCENT,
-                activeforeground=SURFACE, relief="flat", bd=0,
-                highlightbackground=BORDER, highlightthickness=1,
-                cursor="hand2"
-            )
-            btn.configure(command=lambda k=text, b=btn: self._press(k, b))
-            return btn
-
-        alpha_data = self.LAYOUTS.get(self._layout, self.LAYOUTS["normal"])
-
-        # ── 4-Row Grid with Numpad on the Right ────────────────────────────
-        content = tk.Frame(main_frame, bg=BG)
-        content.pack(fill="both", expand=True)
-        content.columnconfigure(0, weight=8)   # left keyboard area
-        content.columnconfigure(1, weight=2)   # numpad
-        content.rowconfigure(0, weight=1)
-
-        # === LEFT KEYBOARD AREA (4 rows) ===
-        left = tk.Frame(content, bg=BG)
-        left.grid(row=0, column=0, sticky="nsew")
-        for i in range(4):
-            left.rowconfigure(i, weight=1)
-        left.columnconfigure(0, weight=1)
-
-        # ── ROW 1: 10 letter keys ────────────────────────────────────────
-        row1 = tk.Frame(left, bg=BG)
-        row1.grid(row=0, column=0, sticky="nsew", pady=(0, 6))
-        row1.rowconfigure(0, weight=1)
-        for c, key in enumerate(alpha_data["row1"]):
-            row1.columnconfigure(c, weight=1)
-            btn = make_btn(row1, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 2: 9 letter keys ─────────────────────────────────────────
-        row2 = tk.Frame(left, bg=BG)
-        row2.grid(row=1, column=0, sticky="nsew", pady=(0, 6))
-        row2.rowconfigure(0, weight=1)
-        for c, key in enumerate(alpha_data["row2"]):
-            row2.columnconfigure(c, weight=1)
-            btn = make_btn(row2, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 3: 7 letter keys in a horizontal row ─────────────────────
-        row3 = tk.Frame(left, bg=BG)
-        row3.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
-        row3.rowconfigure(0, weight=1)
-
-        for c, key in enumerate(alpha_data["row3"]):
-            row3.columnconfigure(c, weight=1)
-            btn = make_btn(row3, key, font_size=20)
-            btn.grid(row=0, column=c, sticky="nsew", padx=6, pady=4)
-
-        # ── ROW 4: 7 control keys in a horizontal row ────────────────────
-        row4 = tk.Frame(left, bg=BG)
-        row4.grid(row=3, column=0, sticky="nsew")
-        row4.rowconfigure(0, weight=1)
-
-        ctrl_keys = ["|◄", "◄", "⌫", "Space", "Delete", "►", "►|"]
-        for c, ckey in enumerate(ctrl_keys):
-            row4.columnconfigure(c, weight=2 if ckey in ("Space", "Delete") else 1)
-            btn = make_btn(row4, ckey, bg_color=T("#334155"), fg_color=TXT_LIGHT, font_size=15)
-            btn.grid(row=0, column=c, sticky="nsew", padx=5, pady=4)
-
-        # === RIGHT NUMPAD (3×4 grid) ===
-        np_outer = tk.Frame(content, bg=BG, highlightbackground=BORDER,
-                            highlightthickness=1, padx=6, pady=4)
-        np_outer.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        np_outer.rowconfigure(1, weight=1)
-        np_outer.columnconfigure(0, weight=1)
-
-        tk.Label(np_outer, text="NUMBERS", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, pady=(0, 2), sticky="ew")
-
-        np_frame = tk.Frame(np_outer, bg=BG)
-        np_frame.grid(row=1, column=0, sticky="nsew")
-
-        num_grid = [["1","2","3"], ["4","5","6"], ["7","8","9"], [".","0","?"]]
-        for r_idx, row in enumerate(num_grid):
-            np_frame.rowconfigure(r_idx, weight=1)
-            for c_idx, key in enumerate(row):
-                np_frame.columnconfigure(c_idx, weight=1)
-                btn = make_btn(np_frame, key, bg_color=T("#1E3A8A"), fg_color=TXT_LIGHT, font_size=18)
-                btn.grid(row=r_idx, column=c_idx, sticky="nsew", padx=4, pady=4)
-
-    def _press(self, key, btn_widget=None):
-        if btn_widget:
-            orig_bg = btn_widget.cget("bg")
-            orig_fg = btn_widget.cget("fg")
-            btn_widget.configure(bg=T("#16A34A"), fg=T("#FFFFFF"), relief="sunken")
-            self.after(150, lambda: btn_widget.configure(bg=orig_bg, fg=orig_fg, relief="flat"))
-
-        t = self._target
-        if key in ("Save & next", "Enter"):
-            if t: t.insert("insert", "\n")
-        elif key in ("⌫", "Backspace"):
-            if t:
-                pos = t.index("insert")
-                if pos != "1.0":
-                    t.delete("insert-1c", "insert")
-        elif key == "Delete":
-            if t:
-                t.delete("1.0", "end")
-        elif key == "|◄":
-            if t: t.mark_set("insert", "1.0")
-        elif key == "◄":
-            if t:
-                pos = t.index("insert")
-                if pos != "1.0":
-                    t.mark_set("insert", "insert-1c")
-        elif key == "►":
-            if t: t.mark_set("insert", "insert+1c")
-        elif key == "►|":
-            if t: t.mark_set("insert", "end-1c")
-        elif key == "Space":
-            if t: t.insert("insert", " ")
-        else:
-            if t: t.insert("insert", key)
-        if t:
-            t.see("insert")
-            t.focus_set()
+        self._kb.set_layout(layout)
 
     def _center(self):
         self.update_idletasks()
-        sw = self.winfo_screenwidth()
-        sh = self.winfo_screenheight()
-        w  = self.winfo_width()
-        h  = self.winfo_height()
-        self.geometry(f"+{(sw-w)//2}+{sh-h-60}")
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = self.winfo_width(), self.winfo_height()
+        self.geometry(f"+{(sw-w)//2}+{max(0, sh-h-60)}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
