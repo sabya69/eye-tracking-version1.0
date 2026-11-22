@@ -337,16 +337,39 @@ class CustomPhraseDialog(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
 
     def _handle_key(self, key):
+        # Undo / Redo keys: step back / forward through the phrase being typed
+        if not hasattr(self, "_undo_stack"):
+            self._undo_stack, self._redo_stack, self._last_kind = [], [], None
+        if key == "Undo":
+            if self._undo_stack:
+                self._redo_stack.append(self.entry_var.get())
+                self.entry_var.set(self._undo_stack.pop())
+            self._last_kind = None
+            return
+        if key == "Redo":
+            if self._redo_stack:
+                self._undo_stack.append(self.entry_var.get())
+                self.entry_var.set(self._redo_stack.pop())
+            self._last_kind = None
+            return
         if key in ("Save & next", "Enter"):
             self._on_add()
-        elif key in ("⌫", "Backspace"):
+            return
+        if key in ("|◄", "◄", "►", "►|"):
+            return
+        # every other key edits the phrase: remember the text first (grouped per word / backspace run)
+        kind = ("del" if key in ("⌫", "Backspace") else "clear" if key == "Delete"
+                else "space" if key == "Space" else "ins")
+        if kind != self._last_kind or kind in ("space", "clear"):
+            self._undo_stack.append(self.entry_var.get())
+            del self._redo_stack[:]
+        self._last_kind = kind
+        if kind == "del":
             self._backspace()
-        elif key == "Delete":
+        elif kind == "clear":
             self.entry_var.set("")
-        elif key == "Space":
+        elif kind == "space":
             self.entry_var.set(self.entry_var.get() + " ")
-        elif key in ("|◄", "◄", "►", "►|"):
-            pass
         else:
             self.entry_var.set(self.entry_var.get() + key)
 

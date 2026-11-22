@@ -1719,7 +1719,8 @@ class TextEntryExperiment(tk.Toplevel):
         # Keyboard
         kb = tk.Frame(frame, bg=self._C_BG)
         kb.pack(fill="both", expand=True, padx=8, pady=4)
-        OnScreenKeyboard(kb, txt, layout=self._keyboard_layout, notepad_app=None).pack(fill="both", expand=True)
+        OnScreenKeyboard(kb, txt, layout=self._keyboard_layout, notepad_app=None,
+                         undo_redo=False).pack(fill="both", expand=True)   # no Undo/Redo: keeps experiment data clean
 
     # ─────────────────────────────────────────────────────────────────────────
     #  PHASE 4 — COVERT: word visible + keyboard
@@ -1831,7 +1832,8 @@ class TextEntryExperiment(tk.Toplevel):
         # Keyboard
         kb = tk.Frame(frame, bg=self._C_BG)
         kb.pack(fill="both", expand=True, padx=8, pady=4)
-        OnScreenKeyboard(kb, txt, layout=self._keyboard_layout, notepad_app=None).pack(fill="both", expand=True)
+        OnScreenKeyboard(kb, txt, layout=self._keyboard_layout, notepad_app=None,
+                         undo_redo=False).pack(fill="both", expand=True)   # no Undo/Redo: keeps experiment data clean
 
     def _advance(self):
         self._idx += 1

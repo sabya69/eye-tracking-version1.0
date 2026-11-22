@@ -1003,9 +1003,11 @@ class NeoKeyboard(tk.Canvas):
     CTRL = [("|◄", 1.0), ("◄", 1.0), ("⌫", 1.5), ("Space", 4.2), ("►", 1.0), ("►|", 1.0)]
     NUMPAD = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], [".", "0", "?"]]
     CLEAR_ID = "Delete"          # action id (kept so existing logic/log files still match)
+    UNDO_ID  = "Undo"            # header keys, just left of "Clear all"
+    REDO_ID  = "Redo"
 
     def __init__(self, master, target=None, layout="normal", notepad_app=None, on_key=None,
-                 confirm_clear=None, **ignored):
+                 confirm_clear=None, undo_redo=True, **ignored):
         pbg = _bg_of(master)
         super().__init__(master, bg=pbg, highlightthickness=0, bd=0, cursor="hand2")
         self._pbg = pbg
@@ -1014,6 +1016,8 @@ class NeoKeyboard(tk.Canvas):
         self._confirm = CONFIRM_CLEAR_ALL if confirm_clear is None else confirm_clear
         self._armed = False
         self._arm_job = None
+        self._undo_redo = bool(undo_redo)     # False hides the Undo / Redo keys
+        self._last_kind = None                # for grouping undo steps (see _group)
         self._shift = self._caps = False
         self._keys = []                  # dicts: id, label, kind, rect
         self._panel = None
@@ -1023,6 +1027,11 @@ class NeoKeyboard(tk.Canvas):
         self._job = None
         self._geom = None
         self._bdrop = Backdrop(self, base=pbg, fade_edges=90, strength=0.9)
+        if self._undo_redo and target is not None and on_key is None:
+            try:                                   # make sure the Text widget keeps an undo stack
+                target.configure(undo=True, maxundo=-1)
+            except Exception:
+                pass
         self.bind("<<NeoBackdropChanged>>", lambda e: self._relayout(force=True))
         self.bind("<Motion>", self._motion)
         self.bind("<Leave>", lambda e: self._set_hover(None))
@@ -1099,6 +1108,13 @@ class NeoKeyboard(tk.Canvas):
                 add(ch, ch, "num", x1, y1, x1 + nkw, y1 + nrh)
         # CLEAR ALL: alone in the top-right corner, away from every typing key
         add(self.CLEAR_ID, "\u2715  Clear all", "clear", np_x1, m, np_x2, m + head_h)
+        # UNDO / REDO: in the header, left of "Clear all" (a gap keeps them apart from it)
+        if self._undo_redo:
+            hw = max(86, min(150, int(left_w * 0.17)))
+            hgap = max(g, 10)
+            rx2 = np_x1 - col_gap
+            add(self.REDO_ID, "\u21B7  Redo", "history", rx2 - hw, m, rx2, m + head_h)
+            add(self.UNDO_ID, "\u21B6  Undo", "history", rx2 - 2 * hw - hgap, m, rx2 - hw - hgap, m + head_h)
 
         self._keys, self._panel = keys, panel
         self._title_h, self._pp = title_h, pp
@@ -1134,6 +1150,8 @@ class NeoKeyboard(tk.Canvas):
             return mix(lift, ACCENT, 0.14), (AMBER if k["id"] == "\u232b" else TEXT), None
         if kind == "num":
             return mix(lift, PURPLE, 0.12), TEXT, None
+        if kind == "history":
+            return mix(lift, GREEN, 0.16), TEXT, None
         if self._armed:                                  # clear key, waiting for 2nd tap
             return DANGER, ("#1A1510" if IS_DARK else "#FFFFFF"), DANGER
         return mix(lift, DANGER, 0.22), DANGER, DANGER
@@ -1167,7 +1185,7 @@ class NeoKeyboard(tk.Canvas):
             return ("Segoe UI", max(14, min(34, int(rh * 0.34))), "bold")
         if kind == "num":
             return ("Segoe UI", max(13, min(28, int(rh * 0.34))), "bold")
-        if kind == "clear":
+        if kind in ("clear", "history"):
             return ("Segoe UI", max(10, min(15, int(rh * 0.27))), "bold")
         return ("Segoe UI", max(12, min(22, int(rh * 0.27))), "bold")
 
@@ -1266,7 +1284,10 @@ class NeoKeyboard(tk.Canvas):
         if self._armed:                       # any other key cancels a pending clear
             self._disarm()
         if self._on_key is not None:
-            return self._on_key(key)
+            return self._on_key(key)          # (Undo / Redo are forwarded to the handler too)
+        if key in (self.UNDO_ID, self.REDO_ID):
+            return self._history(key)
+        self._group(key)
         if key in ("Save & next", "Enter"):
             if getattr(self, "notepad_app", None) and hasattr(self.notepad_app, "_save"):
                 self.notepad_app._save()
@@ -1291,6 +1312,47 @@ class NeoKeyboard(tk.Canvas):
         if t:
             t.see("insert")
             t.focus_set()
+
+    # -- undo / redo (same as Ctrl+Z / Ctrl+Y) -----------------------------------
+    def _group(self, key):
+        """Close the current undo step when the kind of edit changes, so one Undo takes back
+        a whole run of backspaces or one typed word, not a single letter."""
+        t = self._target
+        if not t:
+            return
+        if key in ("\u232b", "Backspace"):
+            kind = "del"
+        elif key in ("|\u25c4", "\u25c4", "\u25ba", "\u25ba|"):
+            kind = "move"
+        elif key == "Space":
+            kind = "space"
+        else:
+            kind = "ins"
+        if self._last_kind is not None and (kind != self._last_kind or kind in ("space", "move")):
+            try:
+                t.edit_separator()
+            except Exception:
+                pass
+        self._last_kind = kind
+
+    def _history(self, key):
+        t = self._target
+        if not t:
+            return
+        try:
+            t.edit_separator()
+            if key == self.UNDO_ID:
+                t.edit_undo()
+            else:
+                t.edit_redo()
+        except tk.TclError:                   # "nothing to undo / redo"
+            pass
+        self._last_kind = None
+        try:
+            t.see("insert")
+            t.focus_set()
+        except tk.TclError:
+            pass
 
     def _request_clear(self):
         if not self._confirm:
@@ -1328,7 +1390,13 @@ class NeoKeyboard(tk.Canvas):
             return self._on_key(self.CLEAR_ID)
         t = self._target
         if t:
-            t.delete("1.0", "end")
+            try:
+                t.edit_separator()
+                t.delete("1.0", "end")
+                t.edit_separator()            # whole "Clear all" is ONE undo step
+            except tk.TclError:
+                t.delete("1.0", "end")
+            self._last_kind = None
             t.focus_set()
 
 

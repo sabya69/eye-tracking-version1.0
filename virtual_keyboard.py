@@ -4,7 +4,7 @@ import numpy as np
 import time
 from PIL import Image, ImageDraw
 import neo_cv as _cv
-from neo_ui import BG, TEXT, MUTED, ACCENT, DANGER, PURPLE, AMBER, IS_DARK, mix, lighten   # soft glass look
+from neo_ui import BG, TEXT, MUTED, ACCENT, DANGER, PURPLE, AMBER, GREEN, IS_DARK, mix, lighten   # soft glass look
 
 try:
     import pyautogui
@@ -43,6 +43,10 @@ class VirtualKeyboard:
     # corner (CLEAR_KEY) and needs a second, separate dwell to confirm.
     CONTROL_KEYS = ["|◄", "◄", "⌫", "Space", "►", "►|"]
     CLEAR_KEY = "Delete"
+    UNDO_KEY  = "Undo"            # header keys (like Ctrl+Z / Ctrl+Y) next to the text well
+    REDO_KEY  = "Redo"
+    HISTORY_KEYS = (UNDO_KEY, REDO_KEY)
+    HISTORY_LABELS = {"Undo": "\u21B6  Undo", "Redo": "\u21B7  Redo"}
     CLEAR_CONFIRM = True          # False = old one-dwell behaviour
     CLEAR_CONFIRM_SECS = 3.0
     NUMPAD_KEYS = [
@@ -62,6 +66,9 @@ class VirtualKeyboard:
         self.last_press_t   = 0.0
         self._textpad       = None   # set via link_textpad()
         self.current_layout = "normal"
+        self._hist          = []      # undo stack: earlier values of typed_text
+        self._redo          = []      # redo stack
+        self._last_kind     = None    # groups edits so one Undo takes back a word / a run of backspaces
         self._armed_t       = 0.0     # time "Clear all" was armed (0 = not armed)
         self._clear_lock    = False   # after arming, gaze must leave the key before it can confirm
         self._surf          = None
@@ -150,7 +157,13 @@ class VirtualKeyboard:
         # ── 6. CLEAR ALL: alone in the top-right corner, away from every typing key ──
         np_right = numpad_x_start + 3 * np_kw + 2 * gap
         self.key_list.append((self.CLEAR_KEY, int(numpad_x_start), 12, int(np_right), self.TEXT_H - 12))
-        self._text_bar = (m, 12, int(left_x_end), self.TEXT_H - 12)
+        # ── 7. UNDO / REDO: right end of the header, between the text well and the numpad column ──
+        hw = 118
+        redo_x1, redo_x2 = int(left_x_end - hw), int(left_x_end)
+        undo_x1, undo_x2 = int(redo_x1 - gap - hw), int(redo_x1 - gap)
+        self.key_list.append((self.UNDO_KEY, undo_x1, 12, undo_x2, self.TEXT_H - 12))
+        self.key_list.append((self.REDO_KEY, redo_x1, 12, redo_x2, self.TEXT_H - 12))
+        self._text_bar = (m, 12, int(undo_x1 - gap), self.TEXT_H - 12)
         self._numpad_panel = (int(numpad_x_start - 14), int(top_y - 10), int(np_right + 14), int(top_y + 4 * kh + 3 * gap + 10))
         self._surf = None            # rebuild cached art for the new layout
 
@@ -223,9 +236,11 @@ class VirtualKeyboard:
         came back, or a deliberate second blink) within CLEAR_CONFIRM_SECS wipes the text."""
         now = time.time()
         if not self.CLEAR_CONFIRM:
+            self._remember("clear")
             self.typed_text = ""
             return
         if self._armed_t and now - self._armed_t <= self.CLEAR_CONFIRM_SECS:
+            self._remember("clear")
             self.typed_text = ""
             self._armed_t = 0.0
             self._clear_lock = False
@@ -233,12 +248,42 @@ class VirtualKeyboard:
             self._armed_t = now
             self._clear_lock = True     # staring at the key must not confirm by itself
 
+    # ── undo / redo ───────────────────────────────────────────────────────────
+    def _remember(self, kind):
+        """Call BEFORE typed_text changes.  Saves the old text unless this edit continues the
+        same run (letters, backspaces) - Space and Clear always start a new undo step."""
+        if kind != self._last_kind or kind in ("space", "clear", "enter"):
+            self._hist.append(self.typed_text)
+            if len(self._hist) > 200:
+                del self._hist[0]
+            del self._redo[:]
+        self._last_kind = kind
+
+    def _undo(self):
+        if self._hist:
+            self._redo.append(self.typed_text)
+            self.typed_text = self._hist.pop()
+        self._last_kind = None
+
+    def _redo_step(self):
+        if self._redo:
+            self._hist.append(self.typed_text)
+            self.typed_text = self._redo.pop()
+        self._last_kind = None
+
     def _press(self, label):
         if label != self.CLEAR_KEY:
             self._armed_t = 0.0         # any other key cancels a pending clear
         self.last_pressed = label
+        if label == self.UNDO_KEY:
+            self._undo()
+            return
+        if label == self.REDO_KEY:
+            self._redo_step()
+            return
         if label in ("Save & next", "ENTER"):
             text = self.typed_text.strip()
+            self._remember("enter")
             if text:
                 if self._textpad is not None:
                     self._textpad.append(text)
@@ -247,8 +292,10 @@ class VirtualKeyboard:
                     pyautogui.press('enter')
             self.typed_text = ""
         elif label in ("⌫", "Backspace"):
+            self._remember("del")
             self.typed_text = self.typed_text[:-1]
         elif label in ("SPACE", "Space"):
+            self._remember("space")
             self.typed_text += " "
         elif label in ("DELETE", "Delete"):
             self._request_clear()
@@ -261,6 +308,7 @@ class VirtualKeyboard:
         elif label == "►|":
             if MOUSE_AVAILABLE: pyautogui.press('end')
         else:
+            self._remember("ins")
             self.typed_text += label
 
     # ── render ────────────────────────────────────────────────────────────────
@@ -271,6 +319,8 @@ class VirtualKeyboard:
             if self._armed_t:
                 return DANGER, ("#1A1510" if IS_DARK else "#FFFFFF"), DANGER
             return mix(lift, DANGER, 0.22), DANGER, DANGER
+        if label in self.HISTORY_KEYS:
+            return mix(lift, GREEN, 0.16), TEXT, None
         if label in self.CONTROL_KEYS:
             return mix(lift, ACCENT, 0.14), (AMBER if label == "⌫" else TEXT), None
         if label in ("1","2","3","4","5","6","7","8","9","0",".","?"):
@@ -287,6 +337,8 @@ class VirtualKeyboard:
             face, fg, glow = self._face_fg(label)
             if label == self.CLEAR_KEY:
                 label_txt, size = "✕  Clear all", 17
+            elif label in self.HISTORY_KEYS:
+                label_txt, size = self.HISTORY_LABELS[label], 16
             else:
                 label_txt, size = label, None
             S.key((x1, y1, x2, y2), label_txt, face, fg, "rest", glow, size, paste=True)
@@ -305,6 +357,8 @@ class VirtualKeyboard:
             face, fg, glow = self._face_fg(label)
             if label == self.CLEAR_KEY:
                 txt, size = ("Look away, then dwell again" if armed else "✕  Clear all"), (14 if armed else 17)
+            elif label in self.HISTORY_KEYS:
+                txt, size = self.HISTORY_LABELS[label], 16
             else:
                 txt, size = label, None
             x, y, im = self._surf.key(rect, txt, face, fg, state, glow, size)
@@ -352,7 +406,7 @@ class VirtualKeyboard:
 
         # typed text inside the inset well
         tx1, ty1, tx2, ty2 = self._text_bar
-        disp = self.typed_text[-52:] if self.typed_text else "start typing…"
+        disp = self.typed_text[-34:] if self.typed_text else "start typing…"
         pil = Image.fromarray(img[ty1:ty2, tx1:tx2, ::-1])
         d = ImageDraw.Draw(pil)
         f = _cv.font(22, bold=bool(self.typed_text))
