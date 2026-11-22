@@ -5,7 +5,7 @@ Tkinter has no blur, no soft shadows and no transparency, so every "soft"
 surface here is rendered with Pillow (two offset blurred shadows for the
 neumorphic look, a blurred + tinted + bordered crop of the backdrop for the
 glass look) and shown as an image on a Canvas.  Colours are derived from
-theme.py, so THEME_MODE ("dusk" | "warm" | "classic") still works.
+theme.py, so THEME_MODE ("pearl" | "dusk" | "warm" | "classic") still works.
 
 WHAT'S IN HERE
     Backdrop        soft gradient + colour blobs; glass widgets sample it
@@ -657,7 +657,7 @@ class _NeuWell(tk.Canvas):
         pbg = _bg_of(master)
         super().__init__(master, bg=pbg, highlightthickness=0, bd=0)
         self._pbg, self._r, self._depth, self._m = pbg, radius, depth, margin
-        self.fill = darken(pbg, 0.10 if IS_DARK else 0.02)
+        self.fill = darken(pbg, 0.10) if IS_DARK else lighten(pbg, 0.45)
         self._child = None
         self._win = None
         self._imgs = []

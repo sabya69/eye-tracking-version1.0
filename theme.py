@@ -9,13 +9,16 @@ HOW TO USE
     bg = T("#FFFFFF")      # -> themed colour for the current mode
 
 SWITCH  (change THEME_MODE below, nothing else needs editing)
+    "pearl"   : NEW default.  Soft light palette - pearl / ice-blue surfaces with
+                gentle pastel accents (periwinkle, lavender, mint, peach).
+                Made for the neumorphic + glass look.
     "dusk"    : dark, warm, low-glare palette.  Best for LONG test sessions
                 (no large bright surface, no pure white, no blue light).
     "warm"    : the previous cream / sand light theme.
     "classic" : the original cool white colours.
 """
 
-THEME_MODE = "dusk"            # "dusk" | "warm" | "classic"
+THEME_MODE = "pearl"           # "pearl" | "dusk" | "warm" | "classic"
 WARM_THEME = THEME_MODE != "classic"   # kept for backward compatibility
 
 # ----------------------------------------------------------------------------
@@ -58,6 +61,46 @@ _DUSK = {
 }
 
 # ----------------------------------------------------------------------------
+#  PEARL  -  soft light palette (cool pearl surfaces, pastel accents)
+#  Surfaces are kept slightly off-white so neumorphic highlights/shadows show.
+# ----------------------------------------------------------------------------
+_PEARL = {
+    # surfaces
+    "#FFFFFF": "#F2F5FB",   # surface / experiment background
+    "#F8FAFC": "#E8ECF5",   # page background
+    "#F5F6F8": "#E6EAF3",   # launcher / keyboard background
+    "#F1F5F9": "#DFE5F1",
+    "#EFEFEF": "#D9E0EE",   # button hover
+    "#E5E7EB": "#D3DBEA",   # separators / bars
+    "#E2E8F0": "#C9D2E4",   # borders
+    "#DDE1E7": "#C9D2E4",
+    "#CBD5E1": "#B8C4DB",
+    "#BFDBFE": "#C6D7F8",   # selection highlight
+    # text
+    "#1A1D23": "#283152",   # main text -> deep indigo-slate (soft, not black)
+    "#0F172A": "#283152",
+    "#475569": "#59647F",
+    "#6B7280": "#6C7692",   # muted text
+    "#64748B": "#7882A0",
+    "#000000": "#232A48",   # fixation cross
+    # key / button fills
+    "#334155": "#5F6F9A",   # control keys (white text on top)
+    "#1E3A8A": "#5262A8",   # numpad keys
+    # accents (pastel, but dark enough to read as text on the light surface)
+    "#2563EB": "#4A63D8",   # blue accent   -> periwinkle blue
+    "#3B82F6": "#6D8CF0",
+    "#1D4ED8": "#3A4DB5",
+    "#7C3AED": "#8D70DA",   # purple        -> soft lavender
+    "#16A34A": "#3FA58A",   # green         -> mint teal
+    "#15803D": "#2E8870",
+    "#D97706": "#E39C45",   # amber         -> warm honey
+    "#EA580C": "#E87F52",   # orange        -> peach
+    "#C2410C": "#C9653A",
+    "#DC2626": "#E15A6E",   # danger        -> rose
+    "#B91C1C": "#C9475C",
+}
+
+# ----------------------------------------------------------------------------
 #  WARM  -  previous light cream theme
 # ----------------------------------------------------------------------------
 _WARM = {
@@ -76,9 +119,9 @@ _WARM = {
 
 # Light text drawn ON a strong coloured key (control / numpad keys).
 # Use  TXT_LIGHT  instead of T("#F8FAFC") for those, so it stays readable.
-TXT_LIGHT = "#F1E6D0" if THEME_MODE == "dusk" else "#F8FAFC"
+TXT_LIGHT = {"dusk": "#F1E6D0", "pearl": "#FFFFFF"}.get(THEME_MODE, "#F8FAFC")
 
-_MAP = _DUSK if THEME_MODE == "dusk" else _WARM
+_MAP = {"dusk": _DUSK, "pearl": _PEARL}.get(THEME_MODE, _WARM)
 
 
 def _auto_warm(hex_color):
@@ -94,6 +137,10 @@ def _auto_warm(hex_color):
             r, g, b = int(r * 0.17), int(g * 0.15), int(b * 0.12)
         else:              # dark colour  -> light warm
             r, g, b = min(255, int(r * 0.4 + 170)), min(255, int(g * 0.4 + 155)), min(255, int(b * 0.4 + 125))
+        return "#{:02X}{:02X}{:02X}".format(r, g, b)
+    if THEME_MODE == "pearl":
+        # cool the colour slightly and pull whites down to the pearl surface
+        r, g, b = int(r * 0.93), int(g * 0.95), min(255, int(b * 0.98 + 2))
         return "#{:02X}{:02X}{:02X}".format(r, g, b)
     r = min(255, int(r * 0.98 + 6))
     g = int(g * 0.93)

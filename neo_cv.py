@@ -79,7 +79,7 @@ class Surface:
         m = self.mrg + 2
         crop = crop_pad(self.img, x1 - m, y1 - m, x2 + m, y2 + m)
         im = render_neu(x2 - x1 + 2 * m, y2 - y1 + 2 * m, BG,
-                        fill or darken(BG, 0.10 if IS_DARK else 0.02), r=r, depth=4, mode="inset", bg_img=crop)
+                        fill or (darken(BG, 0.10) if IS_DARK else lighten(BG, 0.45)), r=r, depth=4, mode="inset", bg_img=crop)
         self.img.paste(im, (x1 - m, y1 - m))
 
     def freeze_bare(self):
